@@ -1,27 +1,50 @@
 import asyncio
-from websockets.asyncio.server import serve
+import json
+import websockets
+import threading
 
-packet = "No"
-def get_packet():
-    return packet
+data_lock = threading.Lock()
+clients = set()
+data = {
+    "A1": 180.0,
+    "A2": 180.0,
+    "A3": 90.0,
+    "A4": 90.0,
+    "A5": 0.0,
+    "A6": 0.0
+}
 
-def set_packet(new_packet):
-    global packet
-    packet = new_packet
+async def handler(websocket):
+    print("Client connected")
+    clients.add(websocket)
 
-async def send_to_pi(websocket):
-    await websocket.send(get_packet())
-    message = await websocket.recv()
-
-
-
-async def main():
-    async with serve(send_to_pi, "10.173.196.156", 8765) as server:
-        await server.serve_forever()
+    try:
+        await websocket.wait_closed()
+    finally:
+        clients.remove(websocket)
+        print("Client disconnected")
 
 
-def run_main(packet):
-    set_packet(packet)
-    asyncio.run(main())
+async def broadcast_loop():
+    while True:
+        with data_lock:
+            packet = json.dumps(data)
+        dead_clients = set()
+        for client in clients:
+            try:
+                await client.send(packet)
+            except:
+                dead_clients.add(client)
+                
+        clients.difference_update(dead_clients)
+        await asyncio.sleep(0.016)
 
-run_main(packet)
+
+async def send_server():
+    server = await websockets.serve(handler, "0.0.0.0", 8765)
+    print("Server running on port 8765")
+    asyncio.create_task(broadcast_loop())
+    await server.wait_closed()
+
+def start_server():
+    asyncio.run(send_server())

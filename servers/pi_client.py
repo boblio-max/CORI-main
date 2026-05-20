@@ -1,14 +1,21 @@
 import asyncio
-from websockets.asyncio.client import connect
+import json
+import websockets
+from adafruit_servokit import ServoKit
 
+kit = ServoKit(channels=16)
+SERVER_IP = "192.168.1.20"
 
-async def recieve_from_ws():
+async def main():
 
-    async with connect(f"ws://10.173.196.156:8765") as websocket:
-        async for message in websocket:
-            await websocket.send(message)
-            print(message)
+    uri = f"ws://{SERVER_IP}:8765"
+    async with websockets.connect(uri) as websocket:
+        print("Connected")
+        while True:
+            packet = await websocket.recv()
+            float_array = json.loads(packet)
+            print("Received:", float_array)
+            for i in range(min(6, len(float_array))):
+                kit.servo[15-i].angle = float_array[i]
 
-
-if __name__ == "__main__":
-    asyncio.run(recieve_from_ws())
+asyncio.run(main())

@@ -11,7 +11,10 @@ import json
 import websockets
 from Robot_math import ik_solver
 from error_handling import errors
+from servers import ws_client
+import threading
 
+threading.Thread(target=ws_client.start_server, daemon=True).start()
 vector = ik_solver.IKSolver(L=1.0)
 
 pygame.init()
@@ -46,6 +49,7 @@ NEEDLE_COLOR = ACCENT_COLOR
 
 logs = []
 
+
 font = pygame.font.SysFont('Arial', 20, bold=True)
 small_font = pygame.font.SysFont('Arial', 14)
 logs_font = pygame.font.SysFont('Consolas', 15)
@@ -54,7 +58,7 @@ logs_font = pygame.font.SysFont('Consolas', 15)
 joint_angles = [180.0, 180.0, 90.0, 90.0, 0.0, 0.0]
 
 col_xs = [width // 6, width // 2.5]
-row_ys = [height // 12 + 40, height // 2 - 120]
+row_ys = [height // 12 + 40, height // 2 - 70]
 
 circle_pos = []
 
@@ -88,7 +92,7 @@ def draw_rounded_rect(surface, rect, color, radius=10, border=0):
         pygame.draw.rect(surface, (255, 255, 255), rect, border, border_radius=radius)
         
 def normalize_angle(angle):
-    return (x % 360 + 360) % 360
+    return (angle % 360 + 360) % 360
 
 def clamp(angle):
     return max(0, min(180, angle))
@@ -134,39 +138,43 @@ while running:
             except Exception:
                 pass
         
-        angles = None
-        if joysticks:
-            joystick = joysticks[0]
-            number_of_axes = joystick.get_numaxes()
-            ax0 = joystick.get_axis(0) if number_of_axes > 0 else 0.0
-            ax1 = joystick.get_axis(1) if number_of_axes > 1 else 0.0
-            z = joystick.get_axis(3) if number_of_axes > 3 else (joystick.get_axis(2) if number_of_axes > 2 else 0.0)
-            vector_to_pass = [ax0 * 3.0, -ax1 * 3.0, z * 3.0]
+    angles = None
+    if joysticks:
+        joystick = joysticks[0]
+        number_of_axes = joystick.get_numaxes()
+        ax0 = joystick.get_axis(0) if number_of_axes > 0 else 0.0
+        ax1 = joystick.get_axis(1) if number_of_axes > 1 else 0.0
+        z = joystick.get_axis(3) if number_of_axes > 3 else (joystick.get_axis(2) if number_of_axes > 2 else 0.0)
+        vector_to_pass = [ax0 * 3.0, -ax1 * 3.0, z * 3.0]
+        
+        try:
+            n = f"{ax0} {ax1} {z}"
+            angles = vector.update_from_vector(vector_to_pass[0], vector_to_pass[1], vector_to_pass[2])
+        except Exception as e:
+            logs.append(str(e))
             
-            try:
-                n = f"{ax0} {ax1} {z}"
-                angles = ik_solver.IKSolver().update_from_vector(vector_to_pass[0], vector_to_pass[1], vector_to_pass[2])
-            except Exception as e:
-                logs.append(str(e))
-                
-        if angles and not is_clicked3:
-            try:
-                a1 = float(angles.get("A1", joint_angles[0]))
-                a2 = float(angles.get("A2", joint_angles[1]))
-                a3 = float(angles.get("A3", joint_angles[2]))
-                a4 = float(angles.get("A4", joint_angles[3]))
-            except Exception:
-                a1, a2, a3, a4, un, un1 = joint_angles
-            
+    if angles is not None and not is_clicked3:
+        try:
+            flat = []
+            for a in angles:
+                if hasattr(a, "__iter__"):
+                    flat.extend(np.array(a).flatten().tolist())
+                else:
+                    flat.append(a)
+            flat = flat[:4]
+
             joint_angles = [
-                round(normalize_angle(a1)),
-                round(normalize_angle(a2)),
-                round(normalize_angle(a3)),
-                round(normalize_angle(a4)),
+                round(np.degrees(flat[0])) % 360,
+                round(np.degrees(flat[1])) % 360,
+                round(np.degrees(flat[2])) % 360,
+                round(np.degrees(flat[3])) % 360,
                 joint_angles[4],
                 joint_angles[5]
             ]
-            
+
+        except Exception as e:
+            print("ANGLE ERROR:", e)
+    
             
             
     screen.fill(BACKGROUND)
@@ -214,6 +222,14 @@ while running:
     for i, line in enumerate(logs_to_show):
         log_label = logs_font.render(line, True, TEXT_COLOR)
         screen.blit(log_label, (logs_rect.x + 10, logs_rect.y + 5 + i * 18))
+    
+    with ws_client.data_lock:
+        ws_client.data["A1"] = joint_angles[0]
+        ws_client.data["A2"] = joint_angles[1]
+        ws_client.data["A3"] = joint_angles[2]
+        ws_client.data["A4"] = joint_angles[3]
+        ws_client.data["A5"] = joint_angles[4]
+        ws_client.data["A6"] = joint_angles[5]
     
     pygame.display.flip()
     
