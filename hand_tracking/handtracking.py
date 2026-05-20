@@ -133,16 +133,16 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     disx = x_c - 640
                     disz = z_c - 360
                     
-                    # We scale the distances to get a 3D vector our solver can understand.
+                   
                     scaled_x = (disx / max_disx) * 3
                     scaled_y = (disy / max_disy) * 3
                     scaled_z = (disz / max_disz) * 3
                     
-                    # Finally, we pass the vector to the IK solver to get the joint angles.
+                    
                     vector_pass = ({scaled_x}, {scaled_y}, {scaled_z})
                     angles_dict = ik_solver.IKSolver.solve_angles(vector_pass[1], vector_pass[0], vector_pass[2])
                     
-                    # Update angles with IK solution (keep angles[4] for grabber/claw, and angles[5] for spare)
+        
                     angles[0] = int(angles_dict['A1'])
                     angles[1] = int(angles_dict['A2'])
                     angles[2] = int(angles_dict['A3'])
