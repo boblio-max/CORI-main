@@ -5,33 +5,31 @@ class IKSolver:
         self.L = L
     
     def solve_angles(self, fx, fy, fz):
-        A2, A3, A4 = 0.0, 0.0, 0.0
-        
         A1 = np.arctan2(fy, fx)
-        
         r = np.hypot(fx, fy)
         s = fz
-        
+
+        L1 = self.L
+        L2 = self.L
+
         dist = np.hypot(r, s)
-        max_reach = self.L * 3
-        
+        max_reach = L1 + L2
+
         if dist > max_reach:
             scale = max_reach / dist
             r *= scale
             s *= scale
-        
-        
-        # Special case
-        if r == 0 and s == 0:
-            A2 = np.arctan2(s, 0)
-            A3 = A4 = 0.0
+            dist = max_reach
             
-        else:
-            c2 = (r**2 + s**2 - 2 * (3*self.L ** 2)) / (2 * self.L**2)
-            c2 = np.clip(c2, -1.0, 1.0)
-            A2 = np.arctan2(s,r) - np.arctan2(np.sqrt(1 - c2**2), c2)
-            
-            A3 = np.arccos(np.clip((r - self.L*np.cos(A2)) / self.L, -1.0, 1.0)) - A2
+        cos_A3 = (r**2 + s**2 - L1**2 - L2**2) / (2 * L1 * L2)
+        cos_A3 = np.clip(cos_A3, -1.0, 1.0)
+        A3 = np.arccos(cos_A3)
+        
+        k1 = L1 + L2 * np.cos(A3)
+        k2 = L2 * np.sin(A3)
+
+        A2 = np.arctan2(s, r) - np.arctan2(k2, k1)
+        A4 = -(A2 + A3)
 
         return {
             'A1': float(np.degrees(A1)),
@@ -40,9 +38,13 @@ class IKSolver:
             'A4': float(np.degrees(A4))
         }
         
-        
     def solve_vectors(self, fx, fy, fz):
-        A2, A3, A4 = 0.0, 0.0, 0.0
+        angles = self.solve_angles(fx, fy, fz)
+
+        A1 = np.radians(angles['A1'])
+        A2 = np.radians(angles['A2'])
+        A3 = np.radians(angles['A3'])
+        A4 = np.radians(angles['A4'])
     
         A1 = np.arctan2(fy, fx)
         

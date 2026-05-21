@@ -146,7 +146,13 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     
                     
                     vector_pass = ({scaled_x}, {scaled_y}, {scaled_z})
-                    angles_dict = ik_solver.IKSolver.solve_angles(vector_pass[1], vector_pass[0], vector_pass[2])
+                    solver = ik_solver.IKSolver()
+
+                    angles_dict = solver.solve_angles(
+                        scaled_x,
+                        scaled_y,
+                        scaled_z
+                    )
                     
         
                     angles[0] = int(angles_dict['A1'])
