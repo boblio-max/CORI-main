@@ -1,17 +1,23 @@
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import urllib.request
-import os
-import sys
 import math
 import numpy as np
 import asyncio
 import json
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from servers import ws_client
 from Robot_math import ik_solver
+import threading
+
+threading.Thread(target=ws_client.start_server, daemon=True).start()
+
+latest_result = None
 
 try:
     from core.config import SERVER_HOST, SERVER_PORT
@@ -155,7 +161,15 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                         is_rotating = True
                     if key == ord('s'):
                         is_rotating = False
-                        
+                    
+                    with ws_client.data_lock:
+                        ws_client.data["A1"] = joint_angles[0]
+                        ws_client.data["A2"] = joint_angles[1]
+                        ws_client.data["A3"] = joint_angles[2]
+                        ws_client.data["A4"] = joint_angles[3]
+                        ws_client.data["A5"] = joint_angles[4]
+                        ws_client.data["A6"] = joint_angles[5]
+    
         cv2.imshow("Hand Tracking", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break

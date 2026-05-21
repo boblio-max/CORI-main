@@ -142,13 +142,31 @@ while running:
     if joysticks:
         joystick = joysticks[0]
         number_of_axes = joystick.get_numaxes()
-        ax0 = joystick.get_axis(0) if number_of_axes > 0 else 0.0
-        ax1 = joystick.get_axis(1) if number_of_axes > 1 else 0.0
-        z = joystick.get_axis(3) if number_of_axes > 3 else (joystick.get_axis(2) if number_of_axes > 2 else 0.0)
-        vector_to_pass = [ax0 * 3.0, -ax1 * 3.0, z * 3.0]
+        
+        raw_ax0 = joystick.get_axis(0) if number_of_axes > 0 else 0.0
+        raw_ax1 = joystick.get_axis(1) if number_of_axes > 1 else 0.0
+        raw_z   = joystick.get_axis(3) if number_of_axes > 3 else (joystick.get_axis(2) if number_of_axes > 2 else 0.0)
+        
+
+        DEADZONE = 0.12       
+        SENSITIVITY_MULT = 1.5 
+        
+        def apply_sensitivity(axis_value):
+
+            if abs(axis_value) < DEADZONE:
+                return 0.0
+
+            sign = np.sign(axis_value)
+            scaled_val = (abs(axis_value) - DEADZONE) / (1.0 - DEADZONE)
+
+            return (scaled_val ** 3) * sign * SENSITIVITY_MULT
+
+        ax0 = apply_sensitivity(raw_ax0)
+        ax1 = apply_sensitivity(raw_ax1)
+        z   = apply_sensitivity(raw_z)
+        vector_to_pass = [ax0, -ax1, z]
         
         try:
-            n = f"{ax0} {ax1} {z}"
             angles = vector.update_from_vector(vector_to_pass[0], vector_to_pass[1], vector_to_pass[2])
         except Exception as e:
             logs.append(str(e))
