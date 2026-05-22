@@ -4,7 +4,7 @@ import websockets
 # from adafruit_servokit import ServoKit
 
 # kit = ServoKit(channels=16)
-SERVER_IP = "10.173.196.156"
+SERVER_IP = "192.168.1.20"
 
 def get_key(index):
     mapping = {

@@ -113,37 +113,39 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     
                     angles[4] = 0
                     
-
+                    
                     if in_range(pts[8][0], pts[7][0], 15) and in_range(pts[8][1], pts[7][1], 15) and in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
                         print("grab")
                         angles[4] = 180
                     
 
-                    if in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15) and :
-                        # print("point")
+                    if in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
+                        print("point")
                         pass
 
                     width_val = x2 - x1
                     height_val = y2 - y1
 
+                    center = (640, 360*2)
                     max_disx = 640   
                     max_disy = 1475100 - 88377
-                    max_disz = 360 
+                    max_disz = 720         
 
                     area = width_val * height_val   
                     set_y = 88377
-                    
+
                     disy = area - set_y
-                    x_c, z_c = pts[9]
-                    
-                    disx = x_c - 640
-                    disz = z_c - 360
-                    
+                    x_c, z_c = pts[9][0], pts[9][1]
+
+                    disx = x_c - center[0]
+                    disz = center[1] - z_c
+                                        
                    
                     scaled_x = (disx / max_disx) * 3
                     scaled_y = (disy / max_disy) * 3
                     scaled_z = (disz / max_disz) * 3
                     
+                    cv2.line(frame, (pts[9][0], pts[9][1]), (center[0], center[1]), (255, 0, 0), 2)
                     
                     vector_pass = ({scaled_x}, {scaled_y}, {scaled_z})
                     solver = ik_solver.IKSolver()
