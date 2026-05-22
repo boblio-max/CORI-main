@@ -55,7 +55,7 @@ small_font = pygame.font.SysFont('Arial', 14)
 logs_font = pygame.font.SysFont('Consolas', 15)
 
 
-joint_angles = [180.0, 180.0, 90.0, 90.0, 0.0, 0.0]
+joint_angles = [90.0, 90.0, 90.0, 90.0,90.0, 90.0]
 
 col_xs = [width // 6, width // 2.5]
 row_ys = [height // 12 + 40, height // 2 - 70]
@@ -99,8 +99,6 @@ def clamp(angle):
 
 while running:
     joystick_vector = (0.0, 0.0, 0.0)
-    
-    a,b,c,d = vector.solve_angles(joystick_vector[0], joystick_vector[1], joystick_vector[2])
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
