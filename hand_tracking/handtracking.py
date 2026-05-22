@@ -114,12 +114,12 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     angles[4] = 0
                     
 
-                    if in_range(pts[4][0], pts[8][0], 25) and in_range(pts[4][1], pts[8][1], 25):
-                        # print("grab")
+                    if in_range(pts[8][0], pts[7][0], 15) and in_range(pts[8][1], pts[7][1], 15) and in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
+                        print("grab")
                         angles[4] = 180
                     
 
-                    if in_range(pts[11][0], pts[9][0], 15) and in_range(pts[11][1], pts[9][1], 15):
+                    if in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15) and :
                         # print("point")
                         pass
 

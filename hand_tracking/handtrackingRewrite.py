@@ -21,7 +21,7 @@ latest_result = None
 try:
     from core.config import SERVER_HOST, SERVER_PORT
 except ImportError:
-    SERVER_HOST = "192.168.1.20"
+    SERVER_HOST = "10.173.196.156"
     SERVER_PORT = 8765
     print("Warning: Could not import core.config, using defaults.")
     
