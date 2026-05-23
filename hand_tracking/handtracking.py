@@ -43,7 +43,7 @@ ts = 0
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-angles = [180, 180, 90, 90, 0, 0] 
+angles = [90, 90, 90, 90, 90, 90] 
 is_rotating = False
 
 MODEL = "hand_landmarker.task"

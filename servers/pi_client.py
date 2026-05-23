@@ -1,9 +1,9 @@
 import asyncio
 import json
 import websockets
-# from adafruit_servokit import ServoKit
+from adafruit_servokit import ServoKit
 
-# kit = ServoKit(channels=16)
+kit = ServoKit(channels=16)
 SERVER_IP = "192.168.1.20"
 
 def get_key(index):
@@ -25,11 +25,11 @@ async def main():
             packet = await websocket.recv()
             float_array = json.loads(packet)
             print("Received:", float_array)
-            # for i in range(min(6, len(float_array))):
-            #     if float_array[get_key(i)] < 0:
-            #         float_array[get_key(i)] = 0
-            #     elif float_array[get_key(i)] > 180:
-            #         float_array[get_key(i)] = 180
-            #     kit.servo[15-i].angle = float_array[get_key(i)]
+            for i in range(min(6, len(float_array))):
+                if float_array[get_key(i)] < 0:
+                    float_array[get_key(i)] = 0
+                elif float_array[get_key(i)] > 180:
+                    float_array[get_key(i)] = 180
+                kit.servo[15-i].angle = float_array[get_key(i)]
 
 asyncio.run(main())
