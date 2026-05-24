@@ -6,12 +6,12 @@ import threading
 data_lock = threading.Lock()
 clients = set()
 data = {
-    "A1": 180.0,
-    "A2": 180.0,
+    "A1": 90.0,
+    "A2": 90.0,
     "A3": 90.0,
     "A4": 90.0,
-    "A5": 0.0,
-    "A6": 0.0
+    "A5": 90.0,
+    "A6": 90.0
 }
 
 async def handler(websocket):

@@ -1,6 +1,4 @@
 import sys, os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
@@ -8,23 +6,37 @@ from mediapipe.tasks.python import vision
 import urllib.request
 import math
 import numpy as np
+import threading
 import json
+
+# Ensure we can import from the parent directory
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from servers import ws_client
 from Robot_math import ik_solverREWRITE
-import threading
+from core import config
 
-# Start websocket server
+# --- CRITICAL FIX: Ensure WebSocket data starts with SAFE_POSE ---
+with ws_client.data_lock:
+    ws_client.data = {
+        "A1": config.SAFE_POSE[0],
+        "A2": config.SAFE_POSE[1],
+        "A3": config.SAFE_POSE[2],
+        "A4": config.SAFE_POSE[3],
+        "A5": config.SAFE_POSE[4],
+        "A6": config.SAFE_POSE[5]
+    }
+
+# Start websocket server background thread
 threading.Thread(target=ws_client.start_server, daemon=True).start()
 
-latest_result = None
+# Initialize the IK solver (Match L with your robot/sim)
+solver = ik_solverREWRITE.IKSolver(L=1.0)
 
-try:
-    from core.config import SERVER_HOST, SERVER_PORT
-except ImportError:
-    SERVER_HOST = "192.168.1.20"
-    SERVER_PORT = 8765
-    print("Warning: Could not import core.config, using defaults.")
-    
+latest_result = None
+is_locked = False
+
+# Mediapipe Connections for drawing
 CONNECTIONS = [
     (0,1),(1,2),(2,3),(3,4),
     (0,5),(5,6),(6,7),(7,8),
@@ -34,38 +46,35 @@ CONNECTIONS = [
     (5,9),(9,13),(13,17)
 ]
 
-cap = cv2.VideoCapture(0)
-ts = 0
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
-
-# Default angles for 6-axis setup
-angles = [90, 90, 90, 90, 90, 0] 
-
-# Initialize the IK solver
-solver = ik_solverREWRITE.IKSolver(L=1.5)
-
+# Model setup
 MODEL = "hand_landmarker.task"
 if not os.path.exists(MODEL):
-    print("Downloading model...")
+    print("Downloading hand landmarker model...")
     urllib.request.urlretrieve(
         "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
         MODEL
     )
-    print("Done.")
 
 def callback(result, output_image, timestamp_ms):
     global latest_result
     latest_result = result
-    
+
 options = vision.HandLandmarkerOptions(
     base_options=python.BaseOptions(model_asset_path=MODEL),
     running_mode=vision.RunningMode.LIVE_STREAM,
     result_callback=callback
 )
 
-# Lock state
-is_locked = False
+# Camera setup
+cap = cv2.VideoCapture(0)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+ts = 0
+
+# Local tracking of angles (initialized to SAFE_POSE)
+current_angles = list(config.SAFE_POSE)
+
+print(f"System Initialized. Starting with SAFE_POSE: {current_angles}")
 
 with vision.HandLandmarker.create_from_options(options) as landmarker:
     while cap.isOpened():
@@ -76,7 +85,6 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
         frame = cv2.flip(frame, 1)
         h, f_w = frame.shape[:2]
         
-        # Only process hand tracking if NOT locked
         if not is_locked:
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
@@ -87,71 +95,83 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                 for hand_landmarks in latest_result.hand_landmarks:
                     pts = [(int(lm.x * f_w), int(lm.y * h)) for lm in hand_landmarks]
                     
-                    # Draw skeleton
+                    # Draw skeleton for feedback
                     for c_a, c_b in CONNECTIONS:
                         cv2.line(frame, pts[c_a], pts[c_b], (0, 255, 0), 2)
                     for pt in pts:
                         cv2.circle(frame, pt, 4, (0, 0, 255), -1)
                     
-                    # Coordinate mapping
+                    # --- COORDINATE MAPPING FIX ---
+                    # ref_x: Center is 640. Map to -1.0 to 1.0
+                    # ref_z: Screen Y (up/down). Map to 0 to 2.0
+                    ref_x, ref_z = pts[9]
+                    
+                    # Horizontal (X)
+                    scaled_x = (ref_x - 640) / 640.0 * 1.5
+                    
+                    # Vertical (Z in IK space)
+                    # Screen Y=0 is Top, Y=720 is Bottom.
+                    # We want 0 at Bottom, 2.0 at Top.
+                    scaled_z = (720 - ref_z) / 720.0 * 2.0
+                    
+                    # Depth (Y in IK space)
+                    # Using hand area as a proxy for distance.
                     x_coords = [p[0] for p in pts]
                     y_coords = [p[1] for p in pts]
-                    x1, y1 = max(0, min(x_coords)), max(0, min(y_coords))
-                    x2, y2 = min(f_w, max(x_coords)), min(h, max(y_coords))
+                    area = (max(x_coords) - min(x_coords)) * (max(y_coords) - min(y_coords))
                     
-                    ref_x, ref_z = pts[9]
-                    scaled_x = (ref_x - 640) / 640 * 1.5
-                    scaled_z = (720 - ref_z) / 720 * 3.0
-                    
-                    area = (x2 - x1) * (y2 - y1)
-                    min_area, max_area = 20000, 200000
+                    min_area, max_area = 30000, 250000
                     clamped_area = np.clip(area, min_area, max_area)
-                    scaled_y = ((clamped_area - min_area) / (max_area - min_area)) * 3.0
+                    # Near (Large Area) -> Y=2.0, Far (Small Area) -> Y=0.5
+                    scaled_y = 0.5 + ((clamped_area - min_area) / (max_area - min_area)) * 1.5
                     
+                    # Solve for A1-A4
                     try:
+                        # Use the rewrite solver which maps 0-180 correctly
                         angles_dict = solver.solve_angles(scaled_x, scaled_y, scaled_z)
-                        angles[0] = int(np.clip(angles_dict['A1'], 0, 180))
-                        angles[1] = int(np.clip(angles_dict['A2'], 0, 180))
-                        angles[2] = int(np.clip(angles_dict['A3'], 0, 180))
-                        angles[3] = int(np.clip(angles_dict['A4'], 0, 180))
-                    except Exception:
+                        
+                        # Clamp and convert to int
+                        current_angles[0] = int(np.clip(angles_dict['A1'], config.SERVO_MIN_ANGLE, config.SERVO_MAX_ANGLE))
+                        current_angles[1] = int(np.clip(angles_dict['A2'], config.SERVO_MIN_ANGLE, config.SERVO_MAX_ANGLE))
+                        current_angles[2] = int(np.clip(angles_dict['A3'], config.SERVO_MIN_ANGLE, config.SERVO_MAX_ANGLE))
+                        current_angles[3] = int(np.clip(angles_dict['A4'], config.SERVO_MIN_ANGLE, config.SERVO_MAX_ANGLE))
+                        
+                        # Wrist Roll (A5)
+                        dx = pts[9][0] - pts[0][0]
+                        dy = pts[9][1] - pts[0][1]
+                        roll_angle = np.degrees(np.arctan2(dx, -dy)) + 90
+                        current_angles[4] = int(np.clip(roll_angle, config.SERVO_MIN_ANGLE, config.SERVO_MAX_ANGLE))
+
+                        # Gripper (A6)
+                        dist_pinch = math.hypot(pts[4][0] - pts[8][0], pts[4][1] - pts[8][1])
+                        current_angles[5] = 180 if dist_pinch < 60 else 0
+
+                        # Broadcast to Robot/Sim
+                        with ws_client.data_lock:
+                            ws_client.data["A1"] = float(current_angles[0])
+                            ws_client.data["A2"] = float(current_angles[1])
+                            ws_client.data["A3"] = float(current_angles[2])
+                            ws_client.data["A4"] = float(current_angles[3])
+                            ws_client.data["A5"] = float(current_angles[4])
+                            ws_client.data["A6"] = float(current_angles[5])
+                            
+                    except Exception as e:
                         pass
-
-                    # Wrist Roll (A5)
-                    dx = pts[9][0] - pts[0][0]
-                    dy = pts[9][1] - pts[0][1]
-                    roll_angle = np.degrees(np.arctan2(dx, -dy)) + 90
-                    angles[4] = int(np.clip(roll_angle, 0, 180))
-
-                    # Gripper (A6)
-                    dist_pinch = math.hypot(pts[4][0] - pts[8][0], pts[4][1] - pts[8][1])
-                    angles[5] = 180 if dist_pinch < 60 else 0
-
-                    # Update shared data
-                    with ws_client.data_lock:
-                        ws_client.data["A1"] = angles[0]
-                        ws_client.data["A2"] = angles[1]
-                        ws_client.data["A3"] = angles[2]
-                        ws_client.data["A4"] = angles[3]
-                        ws_client.data["A5"] = angles[4]
-                        ws_client.data["A6"] = angles[5]
         
-        # Display Status
+        # UI Overlay
         status_text = "LOCKED" if is_locked else "TRACKING"
         status_color = (0, 0, 255) if is_locked else (0, 255, 0)
-        cv2.putText(frame, f"STATUS: {status_text} (Press 'L' to Toggle)", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
-        
-        if not is_locked:
-            cv2.putText(frame, f"A1:{angles[0]} A2:{angles[1]} A3:{angles[2]} A4:{angles[3]} A5:{angles[4]} A6:{angles[5]}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+        cv2.putText(frame, f"STATUS: {status_text} (L to Toggle)", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
+        cv2.putText(frame, f"IK: X:{scaled_x:.2f} Y:{scaled_y:.2f} Z:{scaled_z:.2f}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 1)
+        cv2.putText(frame, f"Angles: {current_angles}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
 
-        cv2.imshow("CORI 6-Axis Hand Tracking", frame)
+        cv2.imshow("CORI Working Hand Tracking", frame)
         
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
             break
         elif key == ord('l'):
             is_locked = not is_locked
-            print(f"Movement {'Locked' if is_locked else 'Unlocked'}")
             
 cap.release()
 cv2.destroyAllWindows()

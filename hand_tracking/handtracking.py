@@ -65,6 +65,11 @@ options = vision.HandLandmarkerOptions(
     result_callback=callback
 )
 
+WORKSPACE_SCALE_X = 0.5  
+WORKSPACE_SCALE_Y = 0.5 
+MAX_EXPECTED_Z = 300.0
+
+solver = ik_solver.IKSolver()
 i=0
 with vision.HandLandmarker.create_from_options(options) as landmarker:
     while cap.isOpened():
@@ -99,69 +104,61 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     x1, y1 = min(x_coords) - 20, min(y_coords) - 20
                     x2, y2 = max(x_coords) + 20, max(y_coords) + 20
                     
-                    if not is_rotating:
-                        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                    bottomx, bottomy = pts[0]
                     
-                    if is_rotating:
-                        n0, n1 = pts[9]
-                        cv2.circle(frame, (x, y), 100, (255, 0, 0), 2)
-                        if math.fabs(a - x) > 0:
-                            distance = math.fabs((b-y))/(math.fabs(a - x))
-                            angle = np.cos((distance - 50) / 100 * math.pi) * 90
-                            cv2.line(frame, (x,y), (n0, n1),(0, 255, 0), 2)
-                            angles[3] = int(angle)
+                    cv2.line(frame,pts[0],pts[9], (0,0,255), 2)
                     
-                    angles[4] = 0
+                    angles[5] = 0
                     
                     
                     if in_range(pts[8][0], pts[7][0], 15) and in_range(pts[8][1], pts[7][1], 15) and in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
                         print(f"grab {i}")
                         i += 1
-                        angles[4] = 180
+                        angles[5] = 1
                     
 
                     # if in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
                     #     print("point")
                     #     pass
 
-                    width_val = x2 - x1
-                    height_val = y2 - y1
-
-                    center = (640, 360*2)
-                    max_disx = 640   
-                    max_disy = 1475100 - 88377
-                    max_disz = 720         
-
-                    area = width_val * height_val   
-                    set_y = 88377
-
-                    disy = area - set_y
-                    x_c, z_c = pts[9][0], pts[9][1]
-
-                    disx = x_c - center[0]
-                    disz = center[1] - z_c
-                                        
-                   
-                    scaled_x = (disx / max_disx) * 3
-                    scaled_y = (disy / max_disy) * 3
-                    scaled_z = (disz / max_disz) * 3
+                    center_x, center_y = 640, 720
                     
-                    cv2.line(frame, (pts[9][0], pts[9][1]), (center[0], center[1]), (255, 0, 0), 2)
+                    # Target Point: Joint 9 (Middle finger base MCP joint)
+                    target_x, target_y = pts[9]
                     
-                    vector_pass = ({scaled_x}, {scaled_y}, {scaled_z})
-                    solver = ik_solver.IKSolver()
-
-                    angles_dict = solver.solve_angles(
-                        scaled_x,
-                        scaled_y,
-                        scaled_z
-                    )
+                    # 2. Calculate SIGNED offsets (No math.fabs!)
+                    # Moving left of center makes raw_x negative. Moving right makes it positive.
+                    raw_x = target_x - center_x
                     
-        
-                    angles[0] = int(angles_dict['A1'])
-                    angles[1] = int(angles_dict['A2'])
-                    angles[2] = int(angles_dict['A3'])
-                    angles[3] = int(angles_dict['A4'])
+                    # Invert Y axis: Moving above center makes raw_y positive. Moving below makes it negative.
+                    raw_y = center_y - target_y 
+                    
+                    # 3. Calculate hand depth approximation (Z)
+                    b_hand = np.array(pts[0]) # Wrist
+                    hand = np.array(pts[9])   # Middle Finger Base
+                    hand_size_pixels = np.linalg.norm(b_hand - hand)
+                    
+                    if hand_size_pixels == 0: 
+                        hand_size_pixels = 1
+                        
+                    # 4. Multiply by Scale factors to map pixels to Robot space (mm or cm)
+                    scaled_x = float(raw_x * WORKSPACE_SCALE_X)
+                    scaled_y = float(raw_y * WORKSPACE_SCALE_Y)
+                    scaled_z = float(MAX_EXPECTED_Z - (hand_size_pixels * 1.2))
+                    
+                    print(f"Robot Vector: X: {scaled_x:.2f}, Y: {scaled_y:.2f}, Z: {scaled_z:.2f}")
+                    
+                    # 5. Pass clean, signed vectors to your IK solver
+                    try:
+                        angles_dict = solver.solve_angles(scaled_x, scaled_y, scaled_z)
+                        
+                        angles[0] = int(angles_dict.get('A1', 90))
+                        angles[1] = int(angles_dict.get('A2', 90))
+                        angles[2] = int(angles_dict.get('A3', 90))
+                        angles[3] = int(angles_dict.get('A4', 90))
+                    except Exception as e:
+                        print(f"IK Target Out of Bounds: {e}")
+                        
                     joint_angles = angles
 
                     key = cv2.waitKey(1) & 0xFF
