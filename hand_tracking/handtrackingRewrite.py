@@ -10,7 +10,7 @@ import math
 import numpy as np
 import json
 from servers import ws_client
-from Robot_math import ik_solver
+from Robot_math import ik_solverREWRITE
 import threading
 
 # Start websocket server
@@ -34,19 +34,16 @@ CONNECTIONS = [
     (5,9),(9,13),(13,17)
 ]
 
-def in_range(val1, val2, margin):
-    return abs(val1 - val2) <= margin
-
 cap = cv2.VideoCapture(0)
 ts = 0
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-angles = [90, 90, 90, 90, 0, 0] 
-is_rotating = False
+# Default angles for 6-axis setup
+angles = [90, 90, 90, 90, 90, 0] 
 
-# Initialize the IK solver ONCE outside the loop
-solver = ik_solver.IKSolver()
+# Initialize the IK solver
+solver = ik_solverREWRITE.IKSolver(L=1.5)
 
 MODEL = "hand_landmarker.task"
 if not os.path.exists(MODEL):
@@ -67,6 +64,9 @@ options = vision.HandLandmarkerOptions(
     result_callback=callback
 )
 
+# Lock state
+is_locked = False
+
 with vision.HandLandmarker.create_from_options(options) as landmarker:
     while cap.isOpened():
         ret, frame = cap.read()
@@ -75,103 +75,83 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
 
         frame = cv2.flip(frame, 1)
         h, f_w = frame.shape[:2]
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        landmarker.detect_async(mp_image, ts)
-        ts += 1
         
-        # Draw target crosshair in the center
-        cv2.line(frame, (630, 360), (650, 360), (255, 0, 0), 2)
-        cv2.line(frame, (640, 350), (640, 370), (255, 0, 0), 2)
-        
-        if latest_result and latest_result.hand_landmarks:
-            for hand_landmarks in latest_result.hand_landmarks:
-                pts = [(int(lm.x * f_w), int(lm.y * h)) for lm in hand_landmarks]
-                
-                # Draw skeleton
-                for c_a, c_b in CONNECTIONS:
-                    cv2.line(frame, pts[c_a], pts[c_b], (0, 255, 0), 2)
-                for pt in pts:
-                    cv2.circle(frame, pt, 4, (0, 0, 255), -1)
-                
-                # Bounding box calculations
-                x_coords = [p[0] for p in pts]
-                y_coords = [p[1] for p in pts]
-                x1, y1 = max(0, min(x_coords) - 20), max(0, min(y_coords) - 20)
-                x2, y2 = min(f_w, max(x_coords) + 20), min(h, max(y_coords) + 20)
-                
-                if not is_rotating:
-                    cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
-                
-                # Coordinate mapping (using MCP joint 9 as reference)
-                x_c, z_c = pts[9]
-                max_disx = 640   
-                max_disz = 360 
-                
-                disx = x_c - 640
-                disz = z_c - 360 # Usually vertical screen movement translates to robot Z
-                
-                # Depth calculation (Y) via bounding box area
-                width_val = x2 - x1
-                height_val = y2 - y1
-                area = width_val * height_val   
-                
-                # Prevent negative or division by zero errors by clamping area
-                min_expected_area = 40000 
-                max_expected_area = 300000
-                clamped_area = np.clip(area, min_expected_area, max_expected_area)
-                
-                # Map area directly to a 0.0 to 3.0 scale for physical robot workspace
-                scaled_y = ((clamped_area - min_expected_area) / (max_expected_area - min_expected_area)) * 3.0
-                scaled_x = (disx / max_disx) * 3.0
-                scaled_z = (disz / max_disz) * 3.0 # Note: Check if your robot space inverts Z and Y
-                
-                # Execute Inverse Kinematics
-                try:
-                    angles_dict = solver.solve_angles(scaled_x, scaled_y, scaled_z)
-                    angles[0] = int(angles_dict['A1'])
-                    angles[1] = int(angles_dict['A2'])
-                    angles[2] = int(angles_dict['A3'])
-                    
-                    # Wrist rotation logic handling
-                    if is_rotating:
-                        a, b = pts[12] # Tip of middle finger
-                        x, y = pts[9]  # MCP joint
-                        cv2.circle(frame, (x, y), 100, (255, 0, 0), 2)
-                        if math.fabs(a - x) > 0:
-                            distance = math.fabs((b - y)) / (math.fabs(a - x))
-                            angle = np.cos((distance - 50) / 100 * math.pi) * 90
-                            cv2.line(frame, (x, y), (a, b), (0, 255, 0), 2)
-                            angles[3] = int(angle)
-                    else:
-                        angles[3] = int(angles_dict['A4'])
-                        
-                except Exception as e:
-                    # Capture mathematical out-of-bounds errors from IK solver gracefully
-                    pass
-
-                # Gripper logic (Thumb tip 4 to Index tip 8)
-                angles[4] = 180 if in_range(pts[4][0], pts[8][0], 25) and in_range(pts[4][1], pts[8][1], 25) else 0
-
-                # Update shared server dictionary
-                with ws_client.data_lock:
-                    ws_client.data["A1"] = angles[0]
-                    ws_client.data["A2"] = angles[1]
-                    ws_client.data["A3"] = angles[2]
-                    ws_client.data["A4"] = angles[3]
-                    ws_client.data["A5"] = angles[4]
-                    ws_client.data["A6"] = angles[5]
-        
-        # Check keystrokes
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('r'):
-            is_rotating = True
-        elif key == ord('s'):
-            is_rotating = False
-        elif key == ord('q'):
-            break
+        # Only process hand tracking if NOT locked
+        if not is_locked:
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+            landmarker.detect_async(mp_image, ts)
+            ts += 1
             
-        cv2.imshow("Hand Tracking", frame)
+            if latest_result and latest_result.hand_landmarks:
+                for hand_landmarks in latest_result.hand_landmarks:
+                    pts = [(int(lm.x * f_w), int(lm.y * h)) for lm in hand_landmarks]
+                    
+                    # Draw skeleton
+                    for c_a, c_b in CONNECTIONS:
+                        cv2.line(frame, pts[c_a], pts[c_b], (0, 255, 0), 2)
+                    for pt in pts:
+                        cv2.circle(frame, pt, 4, (0, 0, 255), -1)
+                    
+                    # Coordinate mapping
+                    x_coords = [p[0] for p in pts]
+                    y_coords = [p[1] for p in pts]
+                    x1, y1 = max(0, min(x_coords)), max(0, min(y_coords))
+                    x2, y2 = min(f_w, max(x_coords)), min(h, max(y_coords))
+                    
+                    ref_x, ref_z = pts[9]
+                    scaled_x = (ref_x - 640) / 640 * 1.5
+                    scaled_z = (720 - ref_z) / 720 * 3.0
+                    
+                    area = (x2 - x1) * (y2 - y1)
+                    min_area, max_area = 20000, 200000
+                    clamped_area = np.clip(area, min_area, max_area)
+                    scaled_y = ((clamped_area - min_area) / (max_area - min_area)) * 3.0
+                    
+                    try:
+                        angles_dict = solver.solve_angles(scaled_x, scaled_y, scaled_z)
+                        angles[0] = int(np.clip(angles_dict['A1'], 0, 180))
+                        angles[1] = int(np.clip(angles_dict['A2'], 0, 180))
+                        angles[2] = int(np.clip(angles_dict['A3'], 0, 180))
+                        angles[3] = int(np.clip(angles_dict['A4'], 0, 180))
+                    except Exception:
+                        pass
+
+                    # Wrist Roll (A5)
+                    dx = pts[9][0] - pts[0][0]
+                    dy = pts[9][1] - pts[0][1]
+                    roll_angle = np.degrees(np.arctan2(dx, -dy)) + 90
+                    angles[4] = int(np.clip(roll_angle, 0, 180))
+
+                    # Gripper (A6)
+                    dist_pinch = math.hypot(pts[4][0] - pts[8][0], pts[4][1] - pts[8][1])
+                    angles[5] = 180 if dist_pinch < 60 else 0
+
+                    # Update shared data
+                    with ws_client.data_lock:
+                        ws_client.data["A1"] = angles[0]
+                        ws_client.data["A2"] = angles[1]
+                        ws_client.data["A3"] = angles[2]
+                        ws_client.data["A4"] = angles[3]
+                        ws_client.data["A5"] = angles[4]
+                        ws_client.data["A6"] = angles[5]
         
+        # Display Status
+        status_text = "LOCKED" if is_locked else "TRACKING"
+        status_color = (0, 0, 255) if is_locked else (0, 255, 0)
+        cv2.putText(frame, f"STATUS: {status_text} (Press 'L' to Toggle)", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, status_color, 2)
+        
+        if not is_locked:
+            cv2.putText(frame, f"A1:{angles[0]} A2:{angles[1]} A3:{angles[2]} A4:{angles[3]} A5:{angles[4]} A6:{angles[5]}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+
+        cv2.imshow("CORI 6-Axis Hand Tracking", frame)
+        
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
+            break
+        elif key == ord('l'):
+            is_locked = not is_locked
+            print(f"Movement {'Locked' if is_locked else 'Unlocked'}")
+            
 cap.release()
 cv2.destroyAllWindows()
