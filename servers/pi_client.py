@@ -4,13 +4,12 @@ import asyncio
 import json
 import websockets
 from adafruit_servokit import ServoKit
-
-# Add parent directory to sys.path to allow core config import
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from core import config
+import socket
 
 kit = ServoKit(channels=16)
-SERVER_IP = "192.168.1.20"
+SERVER_IP = socket.gethostbyname(socket.gethostname())
 
 async def main():
     uri = f"ws://{SERVER_IP}:8765"
@@ -20,7 +19,7 @@ async def main():
         "A2": config.SERVO_MAP['shoulder'],   # Shoulder angle
         "A3": config.SERVO_MAP['elbow'],      # Elbow angle
         "A4": config.SERVO_MAP['wrist'],      # Wrist angle
-        "A5": config.SERVO_MAP['spare'],      # Wrist roll (spare)
+        "A5": config.SERVO_MAP['spare'],      # Wrist roll
         "A6": config.SERVO_MAP['claw']        # Claw gripper
     }
     

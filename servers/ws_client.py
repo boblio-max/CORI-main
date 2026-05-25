@@ -2,6 +2,9 @@ import asyncio
 import json
 import websockets
 import threading
+import socket
+
+local_ip = socket.gethostbyname(socket.gethostname()) 
 
 data_lock = threading.Lock()
 clients = set()
@@ -41,7 +44,7 @@ async def broadcast_loop():
 
 
 async def send_server():
-    server = await websockets.serve(handler, "0.0.0.0", 8765)
+    server = await websockets.serve(handler, local_ip, 8765)
     print("Server running on port 8765")
     asyncio.create_task(broadcast_loop())
     await server.wait_closed()

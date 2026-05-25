@@ -1,7 +1,6 @@
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-
+import socket
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
@@ -18,13 +17,12 @@ import threading
 threading.Thread(target=ws_client.start_server, daemon=True).start()
 
 latest_result = None
+local_ip = socket.gethostbyname(socket.gethostname())
+print(local_ip)
 
-try:
-    from core.config import SERVER_HOST, SERVER_PORT
-except ImportError:
-    SERVER_HOST = "192.168.1.20"
-    SERVER_PORT = 8765
-    print("Warning: Could not import core.config, using defaults.")
+SERVER_HOST = local_ip
+SERVER_PORT = 8765
+print("Warning: Could not import core.config, using defaults.")
     
 CONNECTIONS = [
     (0,1),(1,2),(2,3),(3,4),
@@ -59,6 +57,12 @@ def callback(result, output_image, timestamp_ms):
     global latest_result
     latest_result = result
     
+def map_value(value, left_min, left_max, right_min, right_max):
+    left_span = left_max - left_min
+    right_span = right_max - right_min
+    value_scaled = float(value - left_min) / float(left_span)
+    return right_min + (value_scaled * right_span)
+
 options = vision.HandLandmarkerOptions(
     base_options=python.BaseOptions(model_asset_path=MODEL),
     running_mode=vision.RunningMode.LIVE_STREAM,
@@ -121,54 +125,41 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     #     print("point")
                     #     pass
 
-                    center_x, center_y = 640, 720
-                    target_x, target_y = pts[9]
-                    raw_x = target_x - center_x
-                    raw_y = target_y  - center_y
+                    center = (640, 360)
+
+                    dist_x  = center[0] - pts[9][0]
                     
+                    scaled_val = 90 - (dist_x * (90 / 640))
+                    final_x_val = max(0, min(180, scaled_val))
+                    key = cv2.waitKey(1) & 0xFF
                     
-                    b_hand = np.array(pts[0])
-                    hand = np.array(pts[9])  
-                    hand_size_pixels = np.linalg.norm(b_hand - hand)
+                    angles[0] = final_x_val
+                    target_total_pitch = map_value(pts[9][1], 0, 720, 270.0, 0.0)
                     
-                    if hand_size_pixels == 0: 
-                        hand_size_pixels = 1
-                        
-                    
-                    scaled_x = float(raw_x * WORKSPACE_SCALE_X)
-                    scaled_y = float(raw_y * WORKSPACE_SCALE_Y)
-                    scaled_z = -float(MAX_EXPECTED_Z - (hand_size_pixels * 1.2))
-                    
-                    print(f"Robot Vector: X: {scaled_x:.2f}, Y: {scaled_y:.2f}, Z: {scaled_z:.2f}")
-                    
-                    # 5. Pass clean, signed vectors to your IK solver
-                    try:
-                        angles_dict = solver.solve_angles(scaled_x, scaled_y, scaled_z)
-                        
-                        angles[0] = int(angles_dict.get('A1', 90))
-                        angles[1] = int(angles_dict.get('A2', 90))
-                        angles[2] = int(angles_dict.get('A3', 90))
-                        angles[3] = int(angles_dict.get('A4', 90))
-                    except Exception as e:
-                        print(f"IK Target Out of Bounds: {e}")
-                        
-                    joint_angles = angles
+                    A2_min, A2_max = 0.0, 80.0
+                    A3_min, A3_max = 0.0, 80.0
+                    A4_min, A4_max = 0.0, 80.0
+
+                    remaining_pitch = target_total_pitch
+                    angles[3] = max(A4_min, min(A4_max, remaining_pitch))
+                    remaining_pitch -= angles[3]
+                    angles[2] = max(A3_min, min(A3_max, remaining_pitch))
+                    remaining_pitch -= angles[2]
+                    angles[1] = max(A2_min, min(A2_max, remaining_pitch))
 
                     key = cv2.waitKey(1) & 0xFF
-                     
-                    if key == ord('r'):
+                    if key == ord('r'): 
                         is_rotating = True
-                    if key == ord('s'):
+                    if key == ord('s'): 
                         is_rotating = False
                     
                     with ws_client.data_lock:
-                        ws_client.data["A1"] = 180 - math.fabs(joint_angles[0]) 
-                        ws_client.data["A2"] = 180 - math.fabs(joint_angles[1])
-                        ws_client.data["A3"] = 180 - math.fabs(joint_angles[2])
-                        ws_client.data["A4"] = 180 - math.fabs(joint_angles[3])
-                        ws_client.data["A5"] = 180 - math.fabs(joint_angles[4])
-                        ws_client.data["A6"] = 180 - math.fabs(joint_angles[5])
-    
+                        ws_client.data["A1"] = float(180 if angles[5] == 1 else 90)
+                        ws_client.data["A2"] = 180 - float(angles[1])
+                        ws_client.data["A3"] = 180 - float(angles[2])
+                        ws_client.data["A4"] = 180 - float(angles[3])
+                        ws_client.data["A5"] = float(angles[0])
+                        ws_client.data["A6"] =  final_x_val
         cv2.imshow("Hand Tracking", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
