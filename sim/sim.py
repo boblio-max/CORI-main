@@ -107,9 +107,12 @@ def main():
             p4 = project(np.array([200, 100, i * 40]), angle_x, angle_y, scale)
             pygame.draw.line(screen, AXIS_COLOR, p3, p4, 1)
 
-        # Get current angles
+        # Get current angles and shift by -90 to align with physical calibration pose
         with data_lock:
-            a1, a2, a3, a4 = np.radians(joint_angles[0]), np.radians(joint_angles[1]), np.radians(joint_angles[2]), np.radians(joint_angles[3])
+            a1 = np.radians(joint_angles[0] - 90)
+            a2 = np.radians(joint_angles[1] - 90)
+            a3 = np.radians(joint_angles[2] - 90)
+            a4 = np.radians(joint_angles[3] - 90)
         
         # Robot base
         origin = np.array([0, 100, 0])

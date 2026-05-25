@@ -122,29 +122,22 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     #     pass
 
                     center_x, center_y = 640, 720
-                    
-                    # Target Point: Joint 9 (Middle finger base MCP joint)
                     target_x, target_y = pts[9]
-                    
-                    # 2. Calculate SIGNED offsets (No math.fabs!)
-                    # Moving left of center makes raw_x negative. Moving right makes it positive.
                     raw_x = target_x - center_x
+                    raw_y = target_y  - center_y
                     
-                    # Invert Y axis: Moving above center makes raw_y positive. Moving below makes it negative.
-                    raw_y = center_y - target_y 
                     
-                    # 3. Calculate hand depth approximation (Z)
-                    b_hand = np.array(pts[0]) # Wrist
-                    hand = np.array(pts[9])   # Middle Finger Base
+                    b_hand = np.array(pts[0])
+                    hand = np.array(pts[9])  
                     hand_size_pixels = np.linalg.norm(b_hand - hand)
                     
                     if hand_size_pixels == 0: 
                         hand_size_pixels = 1
                         
-                    # 4. Multiply by Scale factors to map pixels to Robot space (mm or cm)
+                    
                     scaled_x = float(raw_x * WORKSPACE_SCALE_X)
                     scaled_y = float(raw_y * WORKSPACE_SCALE_Y)
-                    scaled_z = float(MAX_EXPECTED_Z - (hand_size_pixels * 1.2))
+                    scaled_z = -float(MAX_EXPECTED_Z - (hand_size_pixels * 1.2))
                     
                     print(f"Robot Vector: X: {scaled_x:.2f}, Y: {scaled_y:.2f}, Z: {scaled_z:.2f}")
                     
@@ -169,12 +162,12 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                         is_rotating = False
                     
                     with ws_client.data_lock:
-                        ws_client.data["A1"] = joint_angles[0]
-                        ws_client.data["A2"] = joint_angles[1]
-                        ws_client.data["A3"] = joint_angles[2]
-                        ws_client.data["A4"] = joint_angles[3]
-                        ws_client.data["A5"] = joint_angles[4]
-                        ws_client.data["A6"] = joint_angles[5]
+                        ws_client.data["A1"] = 180 - math.fabs(joint_angles[0]) 
+                        ws_client.data["A2"] = 180 - math.fabs(joint_angles[1])
+                        ws_client.data["A3"] = 180 - math.fabs(joint_angles[2])
+                        ws_client.data["A4"] = 180 - math.fabs(joint_angles[3])
+                        ws_client.data["A5"] = 180 - math.fabs(joint_angles[4])
+                        ws_client.data["A6"] = 180 - math.fabs(joint_angles[5])
     
         cv2.imshow("Hand Tracking", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
