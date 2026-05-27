@@ -98,9 +98,9 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                 x,y = pts[9]
                     
                 for c_a, c_b in CONNECTIONS:
-                    cv2.line(frame, pts[c_a], pts[c_b], (0, 255, 0), 2)
+                    cv2.line(frame, pts[c_a], pts[c_b], (255, 255, 0), 2)
                 for pt in pts:
-                    cv2.circle(frame, pt, 4, (0, 0, 255), -1)
+                    cv2.circle(frame, pt, 4, (255, 255, 255), -1)
                 
                 if pts:
                     x_coords = [p[0] for p in pts]
@@ -114,17 +114,50 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     
                     angles[5] = 0
                     
-                    
+                    # Check for grab gesture
                     if in_range(pts[8][0], pts[7][0], 15) and in_range(pts[8][1], pts[7][1], 15) and in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
-                        print(f"grab {i}")
+                        # print(f"grab {i}")
                         i += 1
                         angles[5] = 1
+
+                    
+                    # Check for thumb up gesture
+                    thumb_up = pts[4][1] < pts[0][1] - 30 
+                    tolerance = 60
+                    fingers_curled = (
+                        in_range(pts[8][0], pts[5][0], 35) and in_range(pts[8][1], pts[5][1], tolerance) and  
+                        in_range(pts[12][0], pts[9][0], 35) and in_range(pts[12][1], pts[9][1], tolerance) and 
+                        in_range(pts[16][0], pts[13][0], 35) and in_range(pts[16][1], pts[13][1], tolerance) and 
+                        in_range(pts[20][0], pts[17][0], 35) and in_range(pts[20][1], pts[17][1], tolerance)   
+                    )
+
+                    if thumb_up and fingers_curled:
+                        for i in range(5):
+                            angles[i] = 90
                     
 
-                    # if in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
-                    #     print("point")
-                    #     pass
+                    # Check for OK gesture
+                    mid_finger_up = pts[12][1] < pts[0][1] - 30
+                    ring_finger_up = pts[16][1] < pts[0][1] - 30 and pts[20][1] < pts[0][1] - 30
+                    pinky_up = pts[20][1] < pts[0][1] - 30
 
+                    if in_range(pts[8][0], pts[4][0], 55) and in_range(pts[8][1], pts[4][1], 55) and mid_finger_up and ring_finger_up and pinky_up:
+                        for c_a, c_b in CONNECTIONS:
+                            cv2.line(frame, pts[c_a], pts[c_b], (255, 255, 0), 40)
+                        for pt in pts:
+                            cv2.circle(frame, pt, 20, (255, 255, 0), -1)
+                    
+
+                    # Check for point gesture
+                    if in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
+                        print("point")
+                        pass
+                    
+                    
+                    # Check for faze symbol (Damian suggestion)
+                    pointer_finger_up = pts[8][1] < pts[0][1] - 30
+                    if in_range(pts[11][0], pts[3][0], 35) and in_range(pts[11][1], pts[3][1], 35):
+                        print("faze")
                     center = (640, 360)
 
                     dist_x  = center[0] - pts[9][0]
