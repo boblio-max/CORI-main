@@ -60,18 +60,14 @@ joint_angles = [90.0, 90.0, 90.0, 90.0, 90.0, 90.0]
 col_xs      = [width // 4, width // 4 * 3]
 row_ys      = [120, 280, 440]
 circle_pos  = [
-    (col_xs[0], row_ys[0]),  
-    (col_xs[1], row_ys[0]), 
+    (col_xs[0], row_ys[0]-30),  
+    (col_xs[1], row_ys[0]-30), 
     (col_xs[0], row_ys[1]),  
     (col_xs[1], row_ys[1]),  
-    (width // 2, row_ys[2]), 
+    (width // 2, row_ys[2]-30), 
 ]
 
-circle_pos = []
 
-for i in range(2):
-    for j in range(2):
-        circle_pos.append((col_xs[i], row_ys[j]))
 
 
 joysticks = []
@@ -114,6 +110,7 @@ def clamp(angle):
     return max(0, min(180, angle))
 
 while running:
+    clock.tick(60)
     joystick_vector = (0.0, 0.0, 0.0)
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -187,7 +184,7 @@ while running:
 
         if joy.get_numhats() > 0:
             hat_x, _hat_y = joy.get_hat(0)
-            joint_angles[4] = clamp(joint_angles[4] + hat_x * DPAD_STEP, 0.0, 180.0)
+            joint_angles[4] = clamp(joint_angles[4] + hat_x * DPAD_STEP)
 
             
     if angles is not None and not is_clicked3:
@@ -215,10 +212,11 @@ while running:
             
             
     screen.fill(BACKGROUND)
-    a, b, c, d = vector.solve_angles(joystick_vector[0], joystick_vector[1], joystick_vector[2])
-    
-    draw_rounded_rect(screen, (width//2 - 100, height - 80, 200, 70), PANEL_BG, radius=2)
-    
+
+    title_surf = font.render("C.O.R.I  DASHBOARD", True, ACCENT)
+    screen.blit(title_surf, title_surf.get_rect(center=(width // 2, 40)))
+
+    a, b, c, d = vector.solve_angles(joystick_vector[0], joystick_vector[1], joystick_vector[2])    
     angle_labels = ["A1", "A2", "A3", "A4", "A5"]
     for i, (pos, angle) in enumerate(zip(circle_pos, joint_angles[:6])):
         deviation = abs(angle - 90.0) / 90.0  
@@ -245,6 +243,7 @@ while running:
     
     logs_rect = pygame.Rect(20, height - 180, width // 2 - 20, 150)
     draw_rounded_rect(screen, logs_rect, PANEL_BG, 10)
+    draw_rounded_rect(screen, logs_rect, PANEL_BG, 10, 2)
     for i, line in enumerate(logs[-7:]):
         log_label = logs_font.render(line, True, TEXT_COLOR)
         screen.blit(log_label, (logs_rect.x + 10, logs_rect.y + 10 + i * 18))
