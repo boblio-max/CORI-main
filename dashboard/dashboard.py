@@ -90,6 +90,7 @@ is_clicked3 = False
 running = True
 
 DPAD_STEP = 1.5
+DPAD_STEP_PER_SEC = 90.0
 DEADZONE = 0.10
 
 def draw_rounded_rect(surface, rect, color, radius=10, border=0):
@@ -105,6 +106,12 @@ def axis_to_angle(raw_axis):
         raw_axis = sign * (abs(raw_axis) - DEADZONE) / (1.0 - DEADZONE)
     return 90.0 + raw_axis * 90.0
 
+def scale_angle(angle_deg: float) -> float:
+    """Map 0–180 degrees to -1–1, with 90 degrees -> 0."""
+    return (angle_deg - 90.0) / 90.0
+
+def clamp_0_180(v: float) -> float:
+    return max(0.0, min(180.0, v))
 
 def clamp(angle):
     return max(0, min(180, angle))
@@ -135,7 +142,9 @@ while running:
             if is_btn0:
                 is_clicked = not is_clicked
                 logs.append("Claw Activated" if is_clicked else "Claw Deactivated")
+                joint_angles[5] = 180.0 if is_clicked else 0.0
                 green_button = SUCCESS if is_clicked else PANEL_BG
+
 
             elif is_btn1:
                 is_clicked_ai = not is_clicked_ai
@@ -183,9 +192,24 @@ while running:
         joint_angles[3] = axis_to_angle(-raw_j2_ud)
 
         if joy.get_numhats() > 0:
-            hat_x, _hat_y = joy.get_hat(0)
-            joint_angles[4] = clamp(joint_angles[4] + hat_x * DPAD_STEP)
+            hat_x, hat_y = joy.get_hat(0)
 
+            if hat_x != 0:
+                pass
+            if hat_y == 1:
+                claw_angle = joint_angles[5] + 1
+                if claw_angle > 180:
+                    claw_angle = 180
+                elif claw_angle < 0:
+                    claw_angle = 0
+                joint_angles[5] = claw_angle
+            elif hat_y == -1:
+                claw_angle = joint_angles[5] - 1
+                if claw_angle > 180:
+                    claw_angle = 180
+                elif claw_angle < 0:
+                    claw_angle = 0
+                joint_angles[5] = claw_angle
             
     if angles is not None and not is_clicked3:
         try:
@@ -270,8 +294,9 @@ while running:
         ws_client.data["A3"] = joint_angles[2]
         ws_client.data["A4"] = joint_angles[3]
         ws_client.data["A5"] = joint_angles[4]
-        ws_client.data["A6"] = joint_angles[5]
+        ws_client.data["A6"] = scale_angle(joint_angles[5])
     
+    print(scale_angle(joint_angles[5]))
     pygame.display.flip()
     
 pygame.quit()
