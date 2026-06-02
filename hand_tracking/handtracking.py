@@ -74,6 +74,7 @@ WORKSPACE_SCALE_Y = 0.5
 MAX_EXPECTED_Z = 300.0
 
 solver = ik_solver.IKSolver()
+grab = False
 i=0
 with vision.HandLandmarker.create_from_options(options) as landmarker:
     while cap.isOpened():
@@ -117,8 +118,11 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     # Check for grab gesture
                     if in_range(pts[8][0], pts[7][0], 15) and in_range(pts[8][1], pts[7][1], 15) and in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
                         # print(f"grab {i}")
-                        i += 1
-                        angles[5] = 1
+                        grab = not grab
+                        if grab:
+                            angles[5] = 1
+                        else:
+                            angles[5] = 0
 
                     
                     # Check for thumb up gesture
@@ -186,6 +190,7 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     if key == ord('s'): 
                         is_rotating = False
                     
+                    print(f"angles: {[round(a, 1) for a in angles]}")
                     with ws_client.data_lock:
                         ws_client.data["A1"] = float(180 if angles[5] == 1 else 90)
                         ws_client.data["A2"] = 180 - float(angles[1])

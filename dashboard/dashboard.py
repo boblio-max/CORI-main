@@ -110,8 +110,7 @@ def scale_angle(angle_deg: float) -> float:
     """Map 0–180 degrees to -1–1, with 90 degrees -> 0."""
     return (angle_deg - 90.0) / 90.0
 
-def clamp_0_180(v: float) -> float:
-    return max(0.0, min(180.0, v))
+
 
 def clamp(angle):
     return max(0, min(180, angle))

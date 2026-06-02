@@ -1,7 +1,6 @@
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-
+import socket
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
@@ -18,13 +17,12 @@ import threading
 threading.Thread(target=ws_client.start_server, daemon=True).start()
 
 latest_result = None
+local_ip = socket.gethostbyname(socket.gethostname())
+print(local_ip)
 
-try:
-    from core.config import SERVER_HOST, SERVER_PORT
-except ImportError:
-    SERVER_HOST = "192.168.1.20"
-    SERVER_PORT = 8765
-    print("Warning: Could not import core.config, using defaults.")
+SERVER_HOST = local_ip
+SERVER_PORT = 8765
+print("Warning: Could not import core.config, using defaults.")
     
 CONNECTIONS = [
     (0,1),(1,2),(2,3),(3,4),
@@ -59,6 +57,12 @@ def callback(result, output_image, timestamp_ms):
     global latest_result
     latest_result = result
     
+def map_value(value, left_min, left_max, right_min, right_max):
+    left_span = left_max - left_min
+    right_span = right_max - right_min
+    value_scaled = float(value - left_min) / float(left_span)
+    return right_min + (value_scaled * right_span)
+
 options = vision.HandLandmarkerOptions(
     base_options=python.BaseOptions(model_asset_path=MODEL),
     running_mode=vision.RunningMode.LIVE_STREAM,
@@ -70,6 +74,7 @@ WORKSPACE_SCALE_Y = 0.5
 MAX_EXPECTED_Z = 300.0
 
 solver = ik_solver.IKSolver()
+grab = False
 i=0
 with vision.HandLandmarker.create_from_options(options) as landmarker:
     while cap.isOpened():
@@ -94,9 +99,9 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                 x,y = pts[9]
                     
                 for c_a, c_b in CONNECTIONS:
-                    cv2.line(frame, pts[c_a], pts[c_b], (0, 255, 0), 2)
+                    cv2.line(frame, pts[c_a], pts[c_b], (255, 255, 0), 2)
                 for pt in pts:
-                    cv2.circle(frame, pt, 4, (0, 0, 255), -1)
+                    cv2.circle(frame, pt, 4, (255, 255, 255), -1)
                 
                 if pts:
                     x_coords = [p[0] for p in pts]
@@ -110,65 +115,102 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     
                     angles[5] = 0
                     
-                    
+                    # Check for grab gesture
                     if in_range(pts[8][0], pts[7][0], 15) and in_range(pts[8][1], pts[7][1], 15) and in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
-                        print(f"grab {i}")
-                        i += 1
-                        angles[5] = 1
+                        # print(f"grab {i}")
+                        grab = not grab
+                        if grab:
+                            angles[5] = 1
+                        else:
+                            angles[5] = 0
+
+                    
+                    # Check for thumb up gesture
+                    thumb_up = pts[4][1] < pts[0][1] - 30 
+                    tolerance = 60
+                    fingers_curled = (
+                        in_range(pts[8][0], pts[5][0], 35) and in_range(pts[8][1], pts[5][1], tolerance) and  
+                        in_range(pts[12][0], pts[9][0], 35) and in_range(pts[12][1], pts[9][1], tolerance) and 
+                        in_range(pts[16][0], pts[13][0], 35) and in_range(pts[16][1], pts[13][1], tolerance) and 
+                        in_range(pts[20][0], pts[17][0], 35) and in_range(pts[20][1], pts[17][1], tolerance)   
+                    )
+
+                    if thumb_up and fingers_curled:
+                        for i in range(5):
+                            angles[i] = 90
                     
 
-                    # if in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
-                    #     print("point")
-                    #     pass
+                    # Check for OK gesture
+                    mid_finger_up = pts[12][1] < pts[0][1] - 30
+                    ring_finger_up = pts[16][1] < pts[0][1] - 30 and pts[20][1] < pts[0][1] - 30
+                    pinky_up = pts[20][1] < pts[0][1] - 30
 
-                    center_x, center_y = 640, 720
-                    target_x, target_y = pts[9]
-                    raw_x = target_x - center_x
-                    raw_y = target_y  - center_y
+                    if in_range(pts[8][0], pts[4][0], 55) and in_range(pts[8][1], pts[4][1], 55) and mid_finger_up and ring_finger_up and pinky_up:
+                        for c_a, c_b in CONNECTIONS:
+                            cv2.line(frame, pts[c_a], pts[c_b], (255, 255, 0), 40)
+                        for pt in pts:
+                            cv2.circle(frame, pt, 20, (255, 255, 0), -1)
+                    
+
+                    # Check for point gesture
+                    if in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
+                        print("point")
+                        pass
                     
                     
-                    b_hand = np.array(pts[0])
-                    hand = np.array(pts[9])  
-                    hand_size_pixels = np.linalg.norm(b_hand - hand)
+                    # Check for faze symbol (Damian suggestion)
+                    pointer_finger_up = pts[8][1] < pts[0][1] - 30
+                    if in_range(pts[11][0], pts[3][0], 35) and in_range(pts[11][1], pts[3][1], 35):
+                        print("faze")
+                    center = (640, 360)
+
+                    x0, y0 = pts[0]
+                    x9, y9 = pts[9]
+
+                    # Euclidean distance in pixels between wrist (0) and middle of palm (9)
+                    dist_09 = math.sqrt((x9 - x0) ** 2 + (y9 - y0) ** 2)
+
+                    # Example: print or use it
+                    print("distance 0-9:", dist_09)
+                    print(dist_09)
                     
-                    if hand_size_pixels == 0: 
-                        hand_size_pixels = 1
-                        
+                    if dist_09 > 280:
+                        #Fix THIS AT HOME
+                        pass
+                    dist_x  = center[0] - pts[9][0]
                     
-                    scaled_x = float(raw_x * WORKSPACE_SCALE_X)
-                    scaled_y = float(raw_y * WORKSPACE_SCALE_Y)
-                    scaled_z = -float(MAX_EXPECTED_Z - (hand_size_pixels * 1.2))
+                    scaled_val = 90 - (dist_x * (90 / 640))
+                    final_x_val = max(0, min(180, scaled_val))
+                    key = cv2.waitKey(1) & 0xFF
                     
-                    print(f"Robot Vector: X: {scaled_x:.2f}, Y: {scaled_y:.2f}, Z: {scaled_z:.2f}")
+                    angles[0] = final_x_val
+                    target_total_pitch = map_value(pts[9][1], 0, 720, 270.0, 0.0)
                     
-                    # 5. Pass clean, signed vectors to your IK solver
-                    try:
-                        angles_dict = solver.solve_angles(scaled_x, scaled_y, scaled_z)
-                        
-                        angles[0] = int(angles_dict.get('A1', 90))
-                        angles[1] = int(angles_dict.get('A2', 90))
-                        angles[2] = int(angles_dict.get('A3', 90))
-                        angles[3] = int(angles_dict.get('A4', 90))
-                    except Exception as e:
-                        print(f"IK Target Out of Bounds: {e}")
-                        
-                    joint_angles = angles
+                    A2_min, A2_max = 0.0, 80.0
+                    A3_min, A3_max = 0.0, 80.0
+                    A4_min, A4_max = 0.0, 80.0
+
+                    remaining_pitch = target_total_pitch
+                    angles[3] = max(A4_min, min(A4_max, remaining_pitch))
+                    remaining_pitch -= angles[3]
+                    angles[2] = max(A3_min, min(A3_max, remaining_pitch))
+                    remaining_pitch -= angles[2]
+                    angles[1] = max(A2_min, min(A2_max, remaining_pitch))
 
                     key = cv2.waitKey(1) & 0xFF
-                     
-                    if key == ord('r'):
+                    if key == ord('r'): 
                         is_rotating = True
-                    if key == ord('s'):
+                    if key == ord('s'): 
                         is_rotating = False
                     
+                    # print(f"angles: {[round(a, 1) for a in angles]}")
                     with ws_client.data_lock:
-                        ws_client.data["A1"] = 180 - math.fabs(joint_angles[0]) 
-                        ws_client.data["A2"] = 180 - math.fabs(joint_angles[1])
-                        ws_client.data["A3"] = 180 - math.fabs(joint_angles[2])
-                        ws_client.data["A4"] = 180 - math.fabs(joint_angles[3])
-                        ws_client.data["A5"] = 180 - math.fabs(joint_angles[4])
-                        ws_client.data["A6"] = 180 - math.fabs(joint_angles[5])
-    
+                        ws_client.data["A1"] = float(180 if angles[5] == 1 else 90)
+                        ws_client.data["A2"] = 180 - float(angles[1])
+                        ws_client.data["A3"] = 180 - float(angles[2])
+                        ws_client.data["A4"] = 180 - float(angles[3])
+                        ws_client.data["A5"] = float(angles[0])
+                        ws_client.data["A6"] =  final_x_val
         cv2.imshow("Hand Tracking", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break

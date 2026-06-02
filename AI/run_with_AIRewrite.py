@@ -11,7 +11,7 @@ from servers import ws_client
 import threading
 threading.Thread(target=ws_client.start_server, daemon=True).start()
 
-MODEL_NAME = "gpt-4o-mini"  
+MODEL_NAME = "gpt-3.5-turbo"  # or "gpt-4"
 
 SYSTEM_PROMPT = """You control a 6-DOF robot arm holding a PCB.
 Your job is to choose 6 joint angles so the PCB is in a good position
