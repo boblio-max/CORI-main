@@ -23,12 +23,17 @@ For servo output, uncomment the RPi.GPIO or serial sections below
 and connect to your servo controller (PCA9685, Arduino, etc.).
 """
 
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
 import numpy as np
 import math
 import time
 from dataclasses import dataclass
 from enum import Enum, auto
+from typing import Optional
 
 
 # ─── Configuration ───────────────────────────────────────────────────────────
@@ -37,6 +42,10 @@ from enum import Enum, auto
 L1 = 12.0   # base to joint 2
 L2 = 10.0   # joint 2 to joint 3
 L3 = 7.0    # joint 3 to wrist/claw tip
+
+# Detection settings
+DETECT_CONFIDENCE_THRESHOLD = 0.35
+DETECT_STABLE_FRAMES = 2
 
 # Camera field of view calibration
 # These map pixel offsets from center to real-world cm at 1m depth
@@ -151,6 +160,9 @@ class PCBDetector:
         """
         Detect PCB in frame. Returns PCBPose or None if not found.
         """
+        if cv2 is None:
+            raise RuntimeError("OpenCV is required for PCB detection")
+
         blurred = cv2.GaussianBlur(frame, (7, 7), 0)
         hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
 
@@ -195,6 +207,9 @@ class PCBDetector:
 
     def draw_detection(self, frame, pose: PCBPose):
         """Draw detection overlay on frame."""
+        if cv2 is None:
+            raise RuntimeError("OpenCV is required for drawing detection overlays")
+
         if pose is None:
             cv2.putText(frame, "PCB: NOT FOUND", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
@@ -308,7 +323,20 @@ class RobotController:
         self.ik = ArmIK()
         self.phase = Phase.IDLE
         self.current_angles = ServoAngles()
-        self.target_pose: PCBPose | None = None
+        self.target_pose: Optional[PCBPose] = None
+        self.detection_lock_counter = 0
+        self.sequence_started = False
+
+    def reset_sequence(self):
+        self.target_pose = None
+        self.detection_lock_counter = 0
+        self.phase = Phase.IDLE
+        self.sequence_started = False
+
+    def start_sequence(self):
+        self.reset_sequence()
+        self.sequence_started = True
+        self.phase = Phase.IDLE
 
     # ── Servo output ────────────────────────────────────────────────────────
     def send_angles(self, angles: ServoAngles):
@@ -352,17 +380,30 @@ class RobotController:
     def phase_detect(self, frame) -> bool:
         """Returns True when a confident detection is locked."""
         pose = self.detector.detect(frame)
-        if pose and pose.confidence > 0.4:
-            self.target_pose = pose
-            print(f"\n[DETECT] PCB locked:")
-            print(f"  Position → x:{pose.x_cm:+.1f}cm  y:{pose.y_cm:+.1f}cm  z:{pose.z_cm:.1f}cm")
-            print(f"  Rotation → {pose.angle_deg:.1f}°   confidence: {pose.confidence:.2f}")
-            self.phase = Phase.APPROACH
-            return True
+        if pose and pose.confidence > DETECT_CONFIDENCE_THRESHOLD:
+            self.detection_lock_counter += 1
+            print(f"[DETECT] Candidate PCB detected (confidence {pose.confidence:.2f}) "
+                  f"[{self.detection_lock_counter}/{DETECT_STABLE_FRAMES}]")
+            if self.detection_lock_counter >= DETECT_STABLE_FRAMES:
+                self.target_pose = pose
+                print(f"\n[DETECT] PCB locked:")
+                print(f"  Position → x:{pose.x_cm:+.1f}cm  y:{pose.y_cm:+.1f}cm  z:{pose.z_cm:.1f}cm")
+                print(f"  Rotation → {pose.angle_deg:.1f}°   confidence: {pose.confidence:.2f}")
+                self.phase = Phase.APPROACH
+                return True
+        else:
+            if self.detection_lock_counter > 0:
+                print("[DETECT] Lost stable PCB detection, retrying...")
+            self.detection_lock_counter = 0
         return False
 
     def phase_approach(self):
         """Move claw to hover above PCB, claw open, wrist aligned to PCB rotation."""
+        if self.target_pose is None:
+            print("[APPROACH] No target pose available, returning to detect")
+            self.phase = Phase.DETECT
+            return False
+
         p = self.target_pose
         print(f"\n[APPROACH] Hovering {HOVER_HEIGHT_CM}cm above PCB, opening claw")
 
@@ -374,6 +415,7 @@ class RobotController:
         )
         if angles is None:
             print("[APPROACH] IK failed — target out of reach")
+            self.phase = Phase.DETECT
             return False
 
         # Align wrist to PCB rotation
@@ -388,6 +430,11 @@ class RobotController:
 
     def phase_descend(self):
         """Lower claw to grab height."""
+        if self.target_pose is None:
+            print("[DESCEND] No target pose available, returning to detect")
+            self.phase = Phase.DETECT
+            return False
+
         p = self.target_pose
         print(f"\n[DESCEND] Lowering to grab height {GRAB_HEIGHT_CM}cm")
 
@@ -426,6 +473,10 @@ class RobotController:
 
     # ── Main run loop ────────────────────────────────────────────────────────
     def run(self, camera_index: int = 0):
+        if cv2 is None:
+            print("[ERROR] OpenCV is required to run the camera controller. Install opencv-python and retry.")
+            return
+
         cap = cv2.VideoCapture(camera_index)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
@@ -440,7 +491,7 @@ class RobotController:
         print("=" * 60)
 
         self.phase = Phase.IDLE
-        sequence_started = False
+        self.sequence_started = False
 
         while True:
             ret, frame = cap.read()
@@ -481,16 +532,19 @@ class RobotController:
                     release.a6 = -1.0
                     self.interpolate_to(release, steps=8)
                     time.sleep(0.5)
-                    self.phase = Phase.IDLE
-                    sequence_started = False
+                    self.reset_sequence()
                 else:
                     break
 
-            elif key == ord(' ') and not sequence_started:
-                sequence_started = True
-                self.phase = Phase.IDLE
+            elif key == ord(' '):
+                if not self.sequence_started:
+                    print("\n[START] Beginning pickup sequence")
+                    self.start_sequence()
+                elif self.phase == Phase.HOLD:
+                    print("\n[START] Restarting pickup sequence")
+                    self.start_sequence()
 
-            if sequence_started:
+            if self.sequence_started:
                 if self.phase == Phase.IDLE:
                     self.phase_idle()
 
