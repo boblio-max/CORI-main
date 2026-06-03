@@ -19,7 +19,7 @@ async def main():
         "A2": config.SERVO_MAP['shoulder'],   # Shoulder angle
         "A3": config.SERVO_MAP['elbow'],      # Elbow angle
         "A4": config.SERVO_MAP['wrist'],      # Wrist angle
-        "A5": config.SERVO_MAP['spare'],      # Wrist roll
+        "A5": config.SERVO_MAP['roll'],      # Wrist roll
         "A6": config.SERVO_MAP['claw']        # Claw gripper
     }
     

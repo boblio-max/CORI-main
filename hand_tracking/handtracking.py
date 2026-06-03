@@ -164,6 +164,17 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                         print("faze")
                     center = (640, 360)
 
+                    x0, y0 = pts[0]
+                    x9, y9 = pts[9]
+
+                    # Euclidean distance in pixels between wrist (0) and middle of palm (9)
+                    dist_09 = math.sqrt((x9 - x0) ** 2 + (y9 - y0) ** 2)
+
+                    # Example: print or use it
+                    print("distance 0-9:", dist_09)
+                    print(dist_09)
+                    
+                    
                     dist_x  = center[0] - pts[9][0]
                     
                     scaled_val = 90 - (dist_x * (90 / 640))
@@ -183,14 +194,27 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     angles[2] = max(A3_min, min(A3_max, remaining_pitch))
                     remaining_pitch -= angles[2]
                     angles[1] = max(A2_min, min(A2_max, remaining_pitch))
-
+                    
+                    set_move = 5
+                    if dist_09 > 250:
+                        scale = dist_09 / 250
+                        
+                        angles[1] = angles[1] + set_move * scale
+                        angles[2] = angles[2] - (set_move * scale)/2
+                        angles[3] = angles[3] - (set_move * scale)/2
+                    elif dist_09 < 250:
+                        scale = dist_09 / 250
+                        angles[1] = angles[1] + set_move * scale
+                        angles[2] = angles[2] - (set_move * scale)/2
+                        angles[3] = angles[3] - (set_move * scale)/2
+                        
                     key = cv2.waitKey(1) & 0xFF
                     if key == ord('r'): 
                         is_rotating = True
                     if key == ord('s'): 
                         is_rotating = False
                     
-                    print(f"angles: {[round(a, 1) for a in angles]}")
+                    # print(f"angles: {[round(a, 1) for a in angles]}")
                     with ws_client.data_lock:
                         ws_client.data["A1"] = float(180 if angles[5] == 1 else 90)
                         ws_client.data["A2"] = 180 - float(angles[1])
@@ -198,6 +222,7 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                         ws_client.data["A4"] = 180 - float(angles[3])
                         ws_client.data["A5"] = float(angles[0])
                         ws_client.data["A6"] =  final_x_val
+                        
         cv2.imshow("Hand Tracking", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
