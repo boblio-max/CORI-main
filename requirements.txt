@@ -1,0 +1,10 @@
+numpy
+opencv-python
+mediapipe
+websockets
+pygame
+torch
+g4f
+adafruit-circuitpython-servokit
+# Optional (use if you run headless or need smaller OpenCV):
+# opencv-python-headless
