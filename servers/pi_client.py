@@ -32,8 +32,12 @@ async def main():
             
             for key, val in float_array.items():
                 if key in servo_mapping:
-                    inverted_val = 180 - float(val)
-                    clamped_val = max(0, min(180, inverted_val))
-                    kit.servo[servo_mapping[key]].angle = clamped_val
+                    if key == "A6":# Claw gripper
+                        kit.continuous_servo[servo_mapping[key]].throttle = 1.0
+
+                    else:
+                        inverted_val = 180 - float(val)
+                        clamped_val = max(0, min(180, inverted_val))
+                        kit.servo[servo_mapping[key]].angle = clamped_val
 
 asyncio.run(main())
