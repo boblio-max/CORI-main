@@ -167,14 +167,13 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     x0, y0 = pts[0]
                     x9, y9 = pts[9]
 
-                    # Euclidean distance in pixels between wrist (0) and middle of palm (9)
-                    dist_09 = math.sqrt((x9 - x0) ** 2 + (y9 - y0) ** 2)
+                    dx = x9 - x0
+                    dy = y9 - y0
+                    dist_09 = math.hypot(dx, dy)
+                    rot_angle_09 = (math.degrees(math.atan2(dy, dx)) + 360) % 360
 
-                    # Example: print or use it
-                    print("distance 0-9:", dist_09)
-                    print(dist_09)
-                    
-                    
+                    print(dist_09, rot_angle_09)
+
                     dist_x  = center[0] - pts[9][0]
                     
                     scaled_val = 90 - (dist_x * (90 / 640))
@@ -202,6 +201,7 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                         angles[1] = angles[1] + set_move * scale
                         angles[2] = angles[2] - (set_move * scale)/2
                         angles[3] = angles[3] - (set_move * scale)/2
+
                     elif dist_09 < 250:
                         scale = dist_09 / 250
                         angles[1] = angles[1] + set_move * scale
@@ -214,9 +214,9 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     if key == ord('s'): 
                         is_rotating = False
                     
-                    # print(f"angles: {[round(a, 1) for a in angles]}")
+                    print(f"angles: {[round(a, 1) for a in angles]}")
                     with ws_client.data_lock:
-                        ws_client.data["A1"] = float(180 if angles[5] == 1 else 90)
+                        ws_client.data["A1"] = float(angles[5])
                         ws_client.data["A2"] = 180 - float(angles[1])
                         ws_client.data["A3"] = 180 - float(angles[2])
                         ws_client.data["A4"] = 180 - float(angles[3])
