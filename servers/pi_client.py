@@ -30,14 +30,14 @@ async def main():
             float_array = json.loads(packet)
             print("Received angles:", float_array)
             
-            for key, val in float_array.items():
+            throttle = float_array[5]
+            
+            angles = [float_array[i] for i in range(5)]
+            for key, val in angles.items():
                 if key in servo_mapping:
-                    if key == "A6":# Claw gripper
-                        kit.continuous_servo[servo_mapping[key]].throttle = 1.0
-
-                    else:
-                        inverted_val = 180 - float(val)
-                        clamped_val = max(0, min(180, inverted_val))
-                        kit.servo[servo_mapping[key]].angle = clamped_val
+                    inverted_val = 180 - float(val)
+                    clamped_val = max(0, min(180, inverted_val))
+                    kit.servo[servo_mapping[key]].angle = clamped_val
+                    kit.continuous_servo[servo_mapping["A6"]].throttle = throttle
 
 asyncio.run(main())
