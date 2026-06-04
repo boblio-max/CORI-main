@@ -9,7 +9,7 @@ from core import config
 import socket
 
 kit = ServoKit(channels=16)
-SERVER_IP = socket.gethostbyname(socket.gethostname())
+SERVER_IP = config.SERVER_IP
 
 async def main():
     uri = f"ws://{SERVER_IP}:8765"
