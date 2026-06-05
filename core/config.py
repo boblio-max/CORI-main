@@ -1,4 +1,6 @@
-SERVER_HOST = "192.168.1.20" 
+import socket
+
+SERVER_HOST = socket.gethostbyname(socket.gethostname())
 SERVER_PORT = 8765
 
 SERVO_MAP = {
