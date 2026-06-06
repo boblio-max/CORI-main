@@ -9,7 +9,7 @@ from core import config
 import socket
 
 kit = ServoKit(channels=16)
-SERVER_IP = config.SERVER_IP
+SERVER_IP = config.SERVER_HOST
 
 async def main():
     uri = f"ws://{SERVER_IP}:8765"
@@ -18,9 +18,10 @@ async def main():
         "A1": config.SERVO_MAP['base'],       # Base rotation
         "A2": config.SERVO_MAP['shoulder'],   # Shoulder angle
         "A3": config.SERVO_MAP['elbow'],      # Elbow angle
-        "A4": config.SERVO_MAP['wrist'],      # Wrist angle
-        "A5": config.SERVO_MAP['roll'],      # Wrist roll
-        "A6": config.SERVO_MAP['claw']        # Claw gripper
+        "A4": config.SERVO_MAP['wrist1'],      # Wrist angle
+        "A5": config.SERVO_MAP['wrist2'],       # Wrist roll
+        "A6": config.SERVO_MAP['roll'],      # Wrist roll
+        "A7": config.SERVO_MAP['claw']        # Claw gripper
     }
     
     async with websockets.connect(uri) as websocket:
@@ -30,9 +31,9 @@ async def main():
             float_array = json.loads(packet)
             print("Received angles:", float_array)
             
-            throttle = float_array[5]
+            throttle = float_array['A7']
             
-            angles = [float_array[i] for i in range(5)]
+            angles = {key: float_array[key] for key in ['A1', 'A2', 'A3', 'A4', 'A5', 'A6']}
             for key, val in angles.items():
                 if key in servo_mapping:
                     inverted_val = 180 - float(val)

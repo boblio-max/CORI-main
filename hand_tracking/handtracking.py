@@ -45,14 +45,16 @@ CONNECTIONS = [
 def in_range(val1, val2, margin):
     return abs(val1 - val2) <= margin
 
+# Function to clamp a value to a specified range, used for ensuring servo angles stay within limits
+def clamp_to_range(value, min_val, max_val):
+    return max(min_val, min(max_val, value))
 # Initialize video capture and set properties
 cap = cv2.VideoCapture(0)
 ts = 0
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
-# Initialize angles and state variables
-angles = [90, 90, 90, 90, 90, 90] 
+angles = [90.0, 90.0, 90.0, 90.0, 90.0, 90.0, 0.0] 
 is_rotating = False
 
 # Load the hand landmark model, downloading it if it doesn't exist
@@ -150,7 +152,12 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     # HAND GUESTURE RECOGNITION:
 
                     # Check for grab gesture
-                    if in_range(pts[8][0], pts[7][0], 15) and in_range(pts[8][1], pts[7][1], 15) and in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
+                    grab_gesture = (
+                        in_range(pts[8][0], pts[7][0], 15) and in_range(pts[8][1], pts[7][1], 15) and in_range(pts[12][0], pts[11][0], 15) and 
+                        in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and 
+                        in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15)
+                    )
+                    if grab_gesture:
                         # print(f"grab {i}")
                         grab = not grab
                         if grab:
@@ -170,17 +177,15 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     )
 
                     if thumb_up and fingers_curled:
-                        for i in range(5):
+                        for i in range(4):
                             angles[i] = 90
-                    
+                        angles[5] = 0
+                        print("Return to home")
 
-                    # Check for OK gesture
-                    mid_finger_up = pts[12][1] < pts[0][1] - 30
-                    ring_finger_up = pts[16][1] < pts[0][1] - 30 and pts[20][1] < pts[0][1] - 30
-                    pinky_up = pts[20][1] < pts[0][1] - 30
-
-                    ok_gesture = in_range(pts[8][0], pts[4][0], 55) and in_range(pts[8][1], pts[4][1], 55) and mid_finger_up and ring_finger_up and pinky_up
-                    if ok_gesture:
+                    # Check for more Grab gesture
+                    # this is redundant I know, I just reused my "OK" gesture code to make a more reliable grab gesture
+                    # Because Ok gesture is not needed but grab is
+                    if grab_gesture:
                         for c_a, c_b in CONNECTIONS:
                             cv2.line(frame, pts[c_a], pts[c_b], (255, 255, 0), 40)
                         for pt in pts:
@@ -214,16 +219,17 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     # and then from the top down the angles spin down from the wrist to the shoulder
                     # with certain thresholds
 
-
-
-
-
+                    # FOR Z AXIS
+                    # As your hand moves forward and backward, we calculate the distance from the wrist to the middle finger tip,
+                    # then we scale that distance to control the extension of the arm, with closer being more
+                    # Finally, we move certain angles based on how close or far the hand is to create a more natural movement,
+                    # with the arm extending more as the hand moves forward and retracting as it moves back
                     dx = x9 - x0
                     dy = y9 - y0
                     dist_09 = math.hypot(dx, dy)
                     rot_angle_09 = (math.degrees(math.atan2(dy, dx)) + 360) % 360
 
-                    print(dist_09, rot_angle_09)
+                    # print(dist_09, rot_angle_09)
 
                     dist_x  = center[0] - pts[9][0]
                     
@@ -237,14 +243,18 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     A2_min, A2_max = 0.0, 80.0
                     A3_min, A3_max = 0.0, 80.0
                     A4_min, A4_max = 0.0, 80.0
+                    A5_min, A5_max = 0.0, 80.0
 
                     remaining_pitch = target_total_pitch
+                    angles[4] = max(A5_min, min(A5_max, remaining_pitch))
+                    remaining_pitch -= angles[4]
                     angles[3] = max(A4_min, min(A4_max, remaining_pitch))
                     remaining_pitch -= angles[3]
                     angles[2] = max(A3_min, min(A3_max, remaining_pitch))
                     remaining_pitch -= angles[2]
                     angles[1] = max(A2_min, min(A2_max, remaining_pitch))
                     
+                
                     set_move = 5
                     if dist_09 > 250:
                         scale = dist_09 / 250
@@ -252,27 +262,31 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                         angles[1] = angles[1] + set_move * scale
                         angles[2] = angles[2] - (set_move * scale)/2
                         angles[3] = angles[3] - (set_move * scale)/2
+                        angles[4] = angles[4] - (set_move * scale)/2
 
                     elif dist_09 < 250:
                         scale = dist_09 / 250
                         angles[1] = angles[1] + set_move * scale
                         angles[2] = angles[2] - (set_move * scale)/2
                         angles[3] = angles[3] - (set_move * scale)/2
+                        angles[4] = angles[4] - (set_move * scale)/2
                         
                     key = cv2.waitKey(1) & 0xFF
                     if key == ord('r'): 
                         is_rotating = True
                     if key == ord('s'): 
                         is_rotating = False
+                    print(angles[5])
+                    # print(f"angles: {[round(a, 1) for a in angles]}")
                     
-                    print(f"angles: {[round(a, 1) for a in angles]}")
                     with ws_client.data_lock:
-                        ws_client.data["A1"] = float(angles[5])
-                        ws_client.data["A2"] = 180 - float(angles[1])
-                        ws_client.data["A3"] = 180 - float(angles[2])
-                        ws_client.data["A4"] = 180 - float(angles[3])
-                        ws_client.data["A5"] = float(angles[0])
-                        ws_client.data["A6"] =  final_x_val
+                        ws_client.data["A1"] = clamp_to_range(angles[0], 0, 180)
+                        ws_client.data["A2"] = clamp_to_range(angles[1], 0, 180)
+                        ws_client.data["A3"] = clamp_to_range(angles[2], 0, 180)
+                        ws_client.data["A4"] = clamp_to_range(angles[3], 0, 180)
+                        ws_client.data["A5"] = clamp_to_range(angles[4], 0, 180)
+                        ws_client.data["A6"] = clamp_to_range(angles[5], 0, 180)
+                        ws_client.data["A7"] = clamp_to_range(angles[6], 0, 180)
                         
         cv2.imshow("Hand Tracking", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
