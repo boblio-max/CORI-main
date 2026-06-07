@@ -14,8 +14,7 @@ data = {
     "A3": 90.0,
     "A4": 90.0,
     "A5": 90.0,
-    "A6": 90.0,
-    "A7": 0.0
+    "A6": 0.0
 }
 
 async def handler(websocket):

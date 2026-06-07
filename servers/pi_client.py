@@ -18,8 +18,7 @@ async def main():
         "A1": config.SERVO_MAP['base'],       # Base rotation
         "A2": config.SERVO_MAP['shoulder'],   # Shoulder angle
         "A3": config.SERVO_MAP['elbow'],      # Elbow angle
-        "A4": config.SERVO_MAP['wrist1'],      # Wrist angle
-        "A5": config.SERVO_MAP['wrist2'],       # Wrist roll
+        "A4": config.SERVO_MAP['wrist'],      # Wrist angle
         "A6": config.SERVO_MAP['roll'],      # Wrist roll
         "A7": config.SERVO_MAP['claw']        # Claw gripper
     }
@@ -30,15 +29,14 @@ async def main():
             packet = await websocket.recv()
             float_array = json.loads(packet)
             print("Received angles:", float_array)
-            
-            throttle = float_array['A7']
-            
-            angles = {key: float_array[key] for key in ['A1', 'A2', 'A3', 'A4', 'A5', 'A6']}
-            for key, val in angles.items():
+
+            for key in ['A1', 'A2', 'A3', 'A4', 'A5']:
                 if key in servo_mapping:
-                    inverted_val = 180 - float(val)
-                    clamped_val = max(0, min(180, inverted_val))
+                    val = float(float_array[key])
+                    clamped_val = max(0, min(180, val))
                     kit.servo[servo_mapping[key]].angle = clamped_val
-                    kit.continuous_servo[servo_mapping["A6"]].throttle = throttle
+            
+            # Set continuous claw (A6) throttle
+            kit.continuous_servo[servo_mapping["A6"]].throttle = float(float_array['A6'])
 
 asyncio.run(main())

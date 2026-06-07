@@ -45,7 +45,7 @@ small_font = pygame.font.SysFont('Arial', 14)
 logs_font  = pygame.font.SysFont('Consolas', 14)
 
 # Initialize joint angles 
-joint_angles = [90.0, 90.0, 90.0, 90.0, 90.0, 90.0]
+joint_angles = [90.0, 90.0, 90.0, 90.0, 90.0, 0.0]
 logs = ["System Initialized."]
 
 red_button    = PANEL_BG
