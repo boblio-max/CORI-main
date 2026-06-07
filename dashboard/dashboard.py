@@ -55,8 +55,8 @@ yellow_button = PANEL_BG
 
 is_clicked_ai = False
 is_clicked    = False   
-is_clicked2   = False   
-is_clicked3   = False 
+is_clicked3   = False
+locked_angles = None    # Snapshot of angles taken when LOCK is activated
 
 DPAD_STEP = 1.5
 DEADZONE = 0.10  
@@ -154,6 +154,7 @@ while running:
                 is_clicked = not is_clicked
                 logs.append("Claw Activated" if is_clicked else "Claw Deactivated")
                 green_button = SUCCESS if is_clicked else PANEL_BG
+                joint_angles[5] = 1.0 if is_clicked else 0.0  # 1.0 = close claw, 0.0 = stop (continuous servo throttle)
 
             # Checks to see if the AI mode is activated or not, and toggles the is_clicked_ai state (THIS IS NOT IMPLEMENTED)
             elif is_btn1:
@@ -161,25 +162,31 @@ while running:
                 logs.append("AI Mode " + ("Activated" if is_clicked_ai else "Deactivated"))
                 red_button = DANGER if is_clicked_ai else PANEL_BG
 
-            # Checks to see if the home position button is activated or not, and toggles the is_clicked2 state, which resets the robot's joints to a default position when activated
+            # HOME is a one-shot action: always resets all joints to neutral (90°) and stops the claw
             elif is_btn2:
-                is_clicked2 = not is_clicked2
-                blue_button = ACCENT if is_clicked2 else PANEL_BG
-                joint_angles[:5] = [90.0, 90.0, 90.0, 90.0, 90.0]
+                joint_angles[:] = [90.0, 90.0, 90.0, 90.0, 90.0, 0.0]
+                is_clicked = False          # Deactivate claw
+                green_button = PANEL_BG    # Reset claw button color
+                blue_button = ACCENT       # Flash HOME button blue as confirmation
                 logs.append("Robot returned to home position")
 
-            # Checks to see if the Locked pose button is activated or not, and toggles the is_clicked3 state, which locks the robot's joints
+            # Toggles the LOCK state. When locked, takes a snapshot of current angles
+            # and enforces them every frame so no input source can change them.
             elif is_btn3:
                 is_clicked3 = not is_clicked3
                 yellow_button = WARNING if is_clicked3 else PANEL_BG
                 if is_clicked3:
-                    joint_angles[:5] = joint_angles[:5]  # Keep current angles but prevent changes
-                    logs.append("Locked pose activated")
+                    locked_angles = joint_angles[:6]  # Snapshot all 6 angles (including claw)
+                    logs.append("Pose locked")
                 else:
-                    joint_angles[:5] = joint_angles[:5]  # Allow changes again
-                    logs.append("Locked pose deactivated")
+                    locked_angles = None               # Release the lock
+                    logs.append("Pose unlocked")
 
-    # 
+    # If locked, enforce the snapshot every frame so nothing can override it
+    if is_clicked3 and locked_angles is not None:
+        joint_angles[:6] = locked_angles[:6]
+
+    # Only read joystick input when not locked
     if joysticks and not is_clicked3:
         joy = joysticks[0]
         n_axes = joy.get_numaxes()
