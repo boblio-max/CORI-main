@@ -1,3 +1,6 @@
+# AI VERSION OF THE DASHBOARD -
+# Thing is I wrote changes to both the rewrite and regular myself, so they may look similar
+
 # Import necessary modules and set up paths
 import sys, os
 # Add parent directory to sys.path for module imports
@@ -133,17 +136,22 @@ while running:
     # limit the framerate to 60 FPS
     clock.tick(60)
     joystick_vector = (0.0, 0.0, 0.0)
+    
+    # Check for events such as joystick connections, button presses, and window closing
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        elif event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.JOYBUTTONDOWN:
             
+        # Handle button presses from both the joystick and mouse clicks on the dashboard buttons, updating the state of the buttons and logging these actions
+        elif event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.JOYBUTTONDOWN:
             x, y = pygame.mouse.get_pos() 
             ai_mode_rect = pygame.Rect(width // 2 - 90, height - 75, 80, 30)
             claw_rect    = pygame.Rect(width // 2 + 10, height - 75, 80, 30)
             home_rect    = pygame.Rect(width // 2 - 90, height - 35, 80, 30)
             pose_rect    = pygame.Rect(width // 2 + 10, height - 35, 80, 30)
 
+            # Different buttons can be triggered by either a joystick button press 
+            # or a mouse click on the corresponding area of the dashboard, allowing for flexible control options
             is_btn0 = (event.type == pygame.JOYBUTTONDOWN and event.button == 0) or \
                       (event.type == pygame.MOUSEBUTTONDOWN and claw_rect.collidepoint(x, y))
             is_btn1 = (event.type == pygame.JOYBUTTONDOWN and event.button == 1) or \
@@ -153,6 +161,7 @@ while running:
             is_btn3 = (event.type == pygame.JOYBUTTONDOWN and event.button == 3) or \
                       (event.type == pygame.MOUSEBUTTONDOWN and pose_rect.collidepoint(x, y))
 
+            # Checks to see if the claw is activated or not, and toggles the is_clicked state
             if is_btn0:
                 is_clicked = not is_clicked
                 logs.append("Claw Activated" if is_clicked else "Claw Deactivated")
@@ -160,17 +169,20 @@ while running:
                 green_button = SUCCESS if is_clicked else PANEL_BG
 
 
+            # Checks to see if the AI mode is activated or not, and toggles the is_clicked_ai state (THIS IS NOT IMPLEMENTED)
             elif is_btn1:
                 is_clicked_ai = not is_clicked_ai
                 logs.append("AI Mode " + ("Activated" if is_clicked_ai else "Deactivated"))
                 red_button = DANGER if is_clicked_ai else PANEL_BG
 
+            # Checks to see if the home position button is activated or not, and toggles the is_clicked2 state, which resets the robot's joints to a default position when activated
             elif is_btn2:
                 is_clicked2 = not is_clicked2
                 blue_button = ACCENT if is_clicked2 else PANEL_BG
                 joint_angles[:5] = [90.0, 90.0, 90.0, 90.0, 90.0]
                 logs.append("Robot returned to home position")
 
+            # Checks to see if the Locked pose button is activated or not, and toggles the is_clicked3 state, which locks the robot's joints
             elif is_btn3:
                 is_clicked3 = not is_clicked3
                 yellow_button = WARNING if is_clicked3 else PANEL_BG
@@ -181,11 +193,15 @@ while running:
                     joint_angles[:5] = [90.0, 90.0, 90.0, 90.0, 90.0]
                     logs.append("Predefined pose deactivated")
 
+    # If not locked, read the joystick axes to control the robot's joints, 
+    # and also check for D-pad input to control the claw angle
     angles = None
     if joysticks and not is_clicked3:
         joy = joysticks[0]
         n_axes = joy.get_numaxes()
         
+        # Read the joystick axes with a deadzone to prevent small movements from affecting the robot's position, 
+        # and convert these to angles for the robot's joints
         if n_axes > 4:
             raw_j1_lr = joy.get_axis(3) 
         if n_axes > 3:
@@ -200,14 +216,19 @@ while running:
             raw_j2_lr = 0.0
             raw_j2_ud = 0.0
 
+        # Convert the raw joystick axis values to angles for the robot's joints
         joint_angles[0] = axis_to_angle(raw_j1_lr)
         joint_angles[1] = axis_to_angle(-raw_j1_ud)
         joint_angles[2] = axis_to_angle(raw_j2_lr)
         joint_angles[3] = axis_to_angle(-raw_j2_ud)
 
+        # Check for D-pad input to control the claw angle
         if joy.get_numhats() > 0:
             hat_x, hat_y = joy.get_hat(0)
 
+            # The D-pad input is used to incrementally adjust the claw angle, allowing for fine control over the claw's position.
+            # this was made before the claw was changed to a continuous rotation servo with a throttle, 
+            # so it may not work as intended and needs to be reworked to control the claw's throttle instead of its angle
             if hat_x != 0:
                 pass
             if hat_y == 1:
@@ -225,8 +246,12 @@ while running:
                     claw_angle = 0
                 joint_angles[5] = claw_angle
             
+    # If the pose isn't locked and the robot has angles to read from the joystick, 
+    # update the joint angles based on the inverse kinematics solver
     if angles is not None and not is_clicked3:
         try:
+            # The angles returned by the IK solver may be in a nested structure, 
+            # so we flatten it to get a simple list of angles for the joints
             flat = []
             for a in angles:
                 if hasattr(a, "__iter__"):
@@ -235,6 +260,9 @@ while running:
                     flat.append(a)
             flat = flat[:4]
 
+            # set the joint angles based on the IK solver output, 
+            # while keeping the claw angle unchanged, 
+            # and also ensuring the angles are within the valid range for the robot's joints
             joint_angles = [
                 round(np.degrees(flat[0])) % 360,
                 round(np.degrees(flat[1])) % 360,
@@ -249,13 +277,19 @@ while running:
     
             
             
+    # Drawing the DASHBOARD
     screen.fill(BACKGROUND)
 
+    # adding the title to the top of the dashboard
     title_surf = font.render("C.O.R.I  DASHBOARD", True, ACCENT)
     screen.blit(title_surf, title_surf.get_rect(center=(width // 2, 40)))
 
     a, b, c, d = vector.solve_angles(joystick_vector[0], joystick_vector[1], joystick_vector[2])    
     angle_labels = ["A1", "A2", "A3", "A4", "A5"]
+    
+    # Looping through each of the 5 joint angles to draw the corresponding gauge on the dashboard, 
+    # with the color of the gauge changing based on how far the angle deviates from 90 degrees to provide visual feedback on the joint's position
+    # (THE COLOR CHANGING CODE WAS WRITTEN BY AI, BUT THE REST OF THE GAUGE CODE WAS WRITTEN BY ME)
     for i, (pos, angle) in enumerate(zip(circle_pos, joint_angles[:6])):
         deviation = abs(angle - 90.0) / 90.0  
         ring_r = int(80 + deviation * 175)
@@ -268,6 +302,8 @@ while running:
 
         needle_length = CIRCLE_R - 15
         angle_rad = math.radians(angle - 90)
+        # Math used to calculate the end point of the needle based on the angle, 
+        # with 0 degrees pointing straight up and increasing clockwise (Trigonometry YAY)
         end_x = pos[0] + needle_length * math.cos(angle_rad)
         end_y = pos[1] + needle_length * math.sin(angle_rad)
         pygame.draw.line(screen, ACCENT, pos, (int(end_x), int(end_y)), NEEDLE_WIDTH)
@@ -279,6 +315,7 @@ while running:
         screen.blit(label, label.get_rect(center=(pos[0], pos[1] + CIRCLE_R + 15)))
 
     
+    # Draw the logs panel at the bottom of the dashboard, and loops through the last 7 logs to "scroll" the logs
     logs_rect = pygame.Rect(20, height - 180, width // 2 - 20, 150)
     draw_rounded_rect(screen, logs_rect, PANEL_BG, 10)
     draw_rounded_rect(screen, logs_rect, PANEL_BG, 10, 2)
@@ -286,15 +323,19 @@ while running:
         log_label = logs_font.render(line, True, TEXT_COLOR)
         screen.blit(log_label, (logs_rect.x + 10, logs_rect.y + 10 + i * 18))
     
+    # Draw the backround panel for the buttons 
     panel_rect = pygame.Rect(width // 2 + 40, height - 150, 260, 110)
     draw_rounded_rect(screen, panel_rect, PANEL_BG, 15, 2)
     
+    # set the buttons and their locations
     buttons = [
         (red_button,    "AI MODE", (width // 2 + 60,  height - 135)),
         (green_button,  "CLAW",    (width // 2 + 160, height - 135)),
         (blue_button,   "HOME",    (width // 2 + 60,  height - 90)),
         (yellow_button, "POSE",    (width // 2 + 160, height - 90)),
     ]
+    # Drawing the buttons for AI mode, Claw activation, Home position, and locked pose on the dashboard, 
+    # with their colors changing based on their active state to provide visual feedback to the user  
     for color, text, pos in buttons:
         btn_rect = pygame.Rect(pos[0], pos[1], 80, 35)
         draw_rounded_rect(screen, btn_rect, color, radius=5)
@@ -302,6 +343,7 @@ while running:
         screen.blit(lbl, lbl.get_rect(center=btn_rect.center))
 
 
+    # Sending the data through the websocket server to the raspberry pi, which then uses the pi_client.py to control the robot
     with ws_client.data_lock:
         ws_client.data["A1"] = joint_angles[0]
         ws_client.data["A2"] = joint_angles[1]

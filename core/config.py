@@ -1,8 +1,10 @@
 import socket
 
+# Configuration for the robotic arm control server
 SERVER_HOST = r"192.168.1.20"
 SERVER_PORT = 8765
 
+# Mapping of servo names to their corresponding GPIO pins
 SERVO_MAP = {
     'base': 15,          # A1: Base rotation
     'shoulder': 14,      # A2: Shoulder
@@ -13,6 +15,7 @@ SERVO_MAP = {
     
 }
 
+# List of servo indices in the order they will be controlled
 SERVO_INDICES = [
     SERVO_MAP['base'],
     SERVO_MAP['shoulder'],
@@ -22,7 +25,9 @@ SERVO_INDICES = [
     SERVO_MAP['claw']
 ]
 
+# Default safe pose for the robotic arm (all servos at 90 degrees)
 SAFE_POSE = [90.0, 90.0, 90.0, 90.0, 90.0, 0.0]
 
+# Servo angle limits
 SERVO_MIN_ANGLE = 0
 SERVO_MAX_ANGLE = 180

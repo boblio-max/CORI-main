@@ -1,5 +1,6 @@
 # Error Handler - This keeps track of everything that could go wrong.
-# It's like a dictionary of robot "bad moods" and how to describe them.
+# It's like a dictionary of robot errors and how to describe them.
+# I wrote this thinking it would be useful, but I haven't used it much
 class Error:
     def __init__(self, type):
         self.type = type

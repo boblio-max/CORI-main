@@ -1,3 +1,8 @@
+# WRITTEN BY: ANTIGRAVITY
+# USED AS A TOOL, NOT AS A FINAL PRODUCT
+# NOT PART OF MY PROJECT
+
+#IMPORTS
 import pygame
 import numpy as np
 import sys

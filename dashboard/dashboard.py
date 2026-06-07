@@ -56,7 +56,8 @@ yellow_button = PANEL_BG
 is_clicked_ai = False
 is_clicked    = False   
 is_clicked3   = False
-locked_angles = None    # Snapshot of angles taken when LOCK is activated
+is_toggled    = False  
+locked_angles = None    
 
 DPAD_STEP = 1.5
 DEADZONE = 0.10  
@@ -129,7 +130,8 @@ while running:
             joysticks = [j for j in joysticks if j.get_instance_id() != event.instance_id]
             logs.append("Joystick disconnected.")
 
-        # Handle button presses from both the joystick and mouse clicks on the dashboard buttons, updating the state of the buttons and logging these actions
+        # Handle button presses from both the joystick and mouse clicks on the dashboard buttons, 
+        # updating the state of the buttons and logging these actions
         elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.JOYBUTTONDOWN):
             mx, my = pygame.mouse.get_pos()
 
@@ -139,7 +141,8 @@ while running:
             home_rect    = pygame.Rect(width // 2 - 90, height - 35, 80, 30)
             pose_rect    = pygame.Rect(width // 2 + 10, height - 35, 80, 30)
 
-            # Different buttons can be triggered by either a joystick button press or a mouse click on the corresponding area of the dashboard, allowing for flexible control options
+            # Different buttons can be triggered by either a joystick button press or a mouse click on the 
+            # corresponding area of the dashboard, allowing for flexible control options
             is_btn0 = (event.type == pygame.JOYBUTTONDOWN and event.button == 0) or \
                       (event.type == pygame.MOUSEBUTTONDOWN and claw_rect.collidepoint(mx, my))
             is_btn1 = (event.type == pygame.JOYBUTTONDOWN and event.button == 1) or \
@@ -154,7 +157,7 @@ while running:
                 is_clicked = not is_clicked
                 logs.append("Claw Activated" if is_clicked else "Claw Deactivated")
                 green_button = SUCCESS if is_clicked else PANEL_BG
-                joint_angles[5] = 1.0 if is_clicked else 0.0  # 1.0 = close claw, 0.0 = stop (continuous servo throttle)
+                joint_angles[5] = 1.0 if is_clicked else 0.0  # 1.0 = close claw, 0.0 = stop 
 
             # Checks to see if the AI mode is activated or not, and toggles the is_clicked_ai state (THIS IS NOT IMPLEMENTED)
             elif is_btn1:
@@ -164,10 +167,11 @@ while running:
 
             # HOME is a one-shot action: always resets all joints to neutral (90°) and stops the claw
             elif is_btn2:
+                is_toggled = not is_toggled
                 joint_angles[:] = [90.0, 90.0, 90.0, 90.0, 90.0, 0.0]
-                is_clicked = False          # Deactivate claw
-                green_button = PANEL_BG    # Reset claw button color
-                blue_button = ACCENT       # Flash HOME button blue as confirmation
+                is_clicked = False         
+                green_button = PANEL_BG    
+                blue_button = ACCENT if is_toggled else PANEL_BG
                 logs.append("Robot returned to home position")
 
             # Toggles the LOCK state. When locked, takes a snapshot of current angles
@@ -176,10 +180,10 @@ while running:
                 is_clicked3 = not is_clicked3
                 yellow_button = WARNING if is_clicked3 else PANEL_BG
                 if is_clicked3:
-                    locked_angles = joint_angles[:6]  # Snapshot all 6 angles (including claw)
+                    locked_angles = joint_angles[:6]  
                     logs.append("Pose locked")
                 else:
-                    locked_angles = None               # Release the lock
+                    locked_angles = None               
                     logs.append("Pose unlocked")
 
     # If locked, enforce the snapshot every frame so nothing can override it

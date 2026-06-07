@@ -145,7 +145,7 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     # Draws a line from the wrist to the middle finger tip for visualization
                     cv2.line(frame,pts[0],pts[9], (0,0,255), 2)
                     
-                    angles[5] = 0
+                    angles[6] = 0
                     
                     # HAND GUESTURE RECOGNITION:
 
@@ -154,9 +154,9 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                         # print(f"grab {i}")
                         grab = not grab
                         if grab:
-                            angles[5] = 1
+                            angles[6] = 1
                         else:
-                            angles[5] = 0
+                            angles[6] = 0
 
                     
                     # Check for thumb up gesture
@@ -202,7 +202,7 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     # gets the coordinates of the wrist (landmark 0) and the middle of the palm (landmark 9) to calculate the distance and angle between them for controlling the arm's position and orientation
                     x0, y0 = pts[0]
                     x9, y9 = x, y
-
+                    
                     # Calculate the distance and angle between the wrist and the middle finger tip to use for controlling the robotic arm's position with scaling based on the frame size
                     # FOR X AXIS
                     # As your hand moves left and right, we calculate the distance from the center of the frame,
@@ -219,49 +219,46 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     # then we scale that distance to control the extension of the arm, with closer being more
                     # Finally, we move certain angles based on how close or far the hand is to create a more natural movement,
                     # with the arm extending more as the hand moves forward and retracting as it moves back
+
+                    dx = x9 - x0
+                    dy = y9 - y0
+                    dist_09 = math.hypot(dx, dy)
+                    rot_angle_09 = (math.degrees(math.atan2(dy, dx)) + 360) % 360
+
+                    #print(dist_09, rot_angle_09)
+
+                    dist_x  = center[0] - pts[9][0]
                     
-                    dist_x = center[0] - pts[9][0]          
-                    scaled_val = 90 - (dist_x * (90 / 640)) 
+                    scaled_val = 90 - (dist_x * (90 / 640))
                     final_x_val = max(0, min(180, scaled_val))
-                    angles[0] = final_x_val
-
-                    target_total_pitch = map_value(pts[9][1], 0, 720, 0.0, 270.0)
-
-                    A2_min, A2_max = 0.0, 90.0   
-                    A3_min, A3_max = 0.0, 90.0  
-                    A4_min, A4_max = 0.0, 90.0   
+                    key = cv2.waitKey(1) & 0xFF
                     
+                    angles[0] = final_x_val
+                    target_total_pitch = map_value(pts[9][1], 0, 720, 270.0, 0.0)
+                    
+                    A2_min, A2_max = 0.0, 80.0
+                    A3_min, A3_max = 0.0, 80.0
+                    A4_min, A4_max = 0.0, 80.0
+
                     remaining_pitch = target_total_pitch
-                    angles[1] = max(A2_min, min(A2_max, remaining_pitch))  
-                    remaining_pitch -= angles[1]
-                    angles[2] = max(A3_min, min(A3_max, remaining_pitch))   
+                    angles[3] = max(A4_min, min(A4_max, remaining_pitch))
+                    remaining_pitch -= angles[3]
+                    angles[2] = max(A3_min, min(A3_max, remaining_pitch))
                     remaining_pitch -= angles[2]
-                    angles[3] = max(A4_min, min(A4_max, remaining_pitch))   
+                    angles[1] = max(A2_min, min(A2_max, remaining_pitch))
+                    
+                    set_move = 5
+                    if dist_09 > 250:
+                        scale = dist_09 / 250
+                        angles[1] = max(0, min(180, angles[1] + set_move * scale))
+                        angles[2] = max(0, min(180, angles[2] - (set_move * scale)/2))
+                        angles[3] = max(0, min(180, angles[3] - (set_move * scale)/2))
 
-                    dx_z = pts[12][0] - pts[0][0]
-                    dy_z = pts[12][1] - pts[0][1]
-                    dist_wrist_to_tip = math.hypot(dx_z, dy_z) 
-
-                    Z_NEAR = 300.0  
-                    Z_FAR  = 100.0  
-                    Z_NEUTRAL = 200.0
-                    Z_SCALE = 8.0  
-
-                    if dist_wrist_to_tip > Z_NEUTRAL:    
-                        excess1 = (dist_wrist_to_tip - Z_NEUTRAL) / (Z_NEAR - Z_NEUTRAL)
-                        excess = max(0.0, min(1.0, excess1))
-                        correction = Z_SCALE * excess
-                        angles[1] = max(0, min(180, angles[1] + correction))   
-                        angles[2] = max(0, min(180, angles[2] - correction))   
-                        angles[3] = max(0, min(180, angles[3] - correction / 2))  
-
-                    else:                                  
-                        deficit1 = (Z_NEUTRAL - dist_wrist_to_tip) / (Z_NEUTRAL - Z_FAR)
-                        deficit = max(0.0, min(1.0, deficit1))
-                        correction = Z_SCALE * deficit
-                        angles[1] = max(0, min(180, angles[1] - correction))   
-                        angles[2] = max(0, min(180, angles[2] + correction))    
-                        angles[3] = max(0, min(180, angles[3] + correction / 2)) 
+                    elif dist_09 < 250:
+                        scale = dist_09 / 250
+                        angles[1] = max(0, min(180, angles[1] + set_move * scale))
+                        angles[2] = max(0, min(180, angles[2] - (set_move * scale)/2))
+                        angles[3] = max(0, min(180, angles[3] - (set_move * scale)/2))
 
                     key = cv2.waitKey(1) & 0xFF
                     if key == ord('r'): 
