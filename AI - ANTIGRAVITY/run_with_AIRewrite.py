@@ -167,7 +167,8 @@ def main():
             ws_client.data["A3"] = angles[2]
             ws_client.data["A4"] = angles[3]
             ws_client.data["A5"] = angles[4]
-            ws_client.data["A6"] = angles[5]
+            # Convert A6 degrees -> throttle (-1..1)
+            ws_client.data["A6"] = (float(angles[5]) - 90.0) / 90.0
 
     cap.release()
     cv2.destroyAllWindows()

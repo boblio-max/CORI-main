@@ -4,6 +4,7 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import pygame
 import sys
+import json
 import math
 import numpy as np
 from servers import ws_client
@@ -39,9 +40,33 @@ CIRCLE_BORDER = 3
 NEEDLE_WIDTH  = 3
 GAUGE_BG      = (40, 40, 60)
 
-# Joystick sensitivity: 0.0 = no movement, 1.0 = original sensitivity
-# Lower this value to reduce how much the sticks move the joints.
-JOYSTICK_SENSITIVITY = 0.75
+# Settings persistence for dashboard (stores joystick sensitivity)
+SETTINGS_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'dashboard_settings.json'))
+
+def load_settings():
+    try:
+        with open(SETTINGS_PATH, 'r') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_settings(settings):
+    try:
+        with open(SETTINGS_PATH, 'w') as f:
+            json.dump(settings, f, indent=2)
+    except Exception:
+        pass
+
+# Joystick sensitivity value (dynamic, persisted). Range 0.0..1.0
+_settings = load_settings()
+joystick_sensitivity = float(_settings.get('joystick_sensitivity', 0.25))
+_settings['joystick_sensitivity'] = joystick_sensitivity
+save_settings(_settings)
+
+# Slider geometry for on-screen sensitivity control
+SLIDER_RECT = pygame.Rect(width // 2 - 120, height - 220, 240, 10)
+SLIDER_KNOB_RADIUS = 8
+dragging_sensitivity = False
 
 # Initialized fonts for rendering text on the dashboard
 font       = pygame.font.SysFont('Arial', 20, bold=True)
@@ -103,7 +128,8 @@ def axis_to_angle(raw_axis):
         sign = 1 if raw_axis > 0 else -1
         raw_axis = sign * (abs(raw_axis) - DEADZONE) / (1.0 - DEADZONE)
         # apply global sensitivity scaling (reduces responsiveness)
-        raw_axis = raw_axis * JOYSTICK_SENSITIVITY
+        global joystick_sensitivity
+        raw_axis = raw_axis * joystick_sensitivity
     return 90.0 + raw_axis * 90.0
 
 # Scales the claw angle from 0-180 degrees to a range of -1 to 1, where 90 degrees corresponds to 0 (No movement)
@@ -141,6 +167,14 @@ while running:
         elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.JOYBUTTONDOWN):
             mx, my = pygame.mouse.get_pos()
 
+            # Click on sensitivity slider?
+            if event.type == pygame.MOUSEBUTTONDOWN and SLIDER_RECT.collidepoint(mx, my):
+                dragging_sensitivity = True
+                rel = (mx - SLIDER_RECT.x) / SLIDER_RECT.w
+                joystick_sensitivity = max(0.0, min(1.0, rel))
+                _settings['joystick_sensitivity'] = joystick_sensitivity
+                save_settings(_settings)
+
             # Button rects
             ai_mode_rect = pygame.Rect(width // 2 - 90, height - 75, 80, 30)
             claw_rect    = pygame.Rect(width // 2 + 10, height - 75, 80, 30)
@@ -163,7 +197,8 @@ while running:
                 is_clicked = not is_clicked
                 logs.append("Claw Activated" if is_clicked else "Claw Deactivated")
                 green_button = SUCCESS if is_clicked else PANEL_BG
-                joint_angles[5] = 1.0 if is_clicked else 0.0  # 1.0 = close claw, 0.0 = stop 
+                # Use standardized A6 range: -1.0=open, 0.0=stop, +1.0=close
+                joint_angles[5] = 1.0 if is_clicked else -1.0  # toggle close/open
 
             # Checks to see if the AI mode is activated or not, and toggles the is_clicked_ai state (THIS IS NOT IMPLEMENTED)
             elif is_btn1:
@@ -191,6 +226,28 @@ while running:
                 else:
                     locked_angles = None               
                     logs.append("Pose unlocked")
+
+        elif event.type == pygame.MOUSEBUTTONUP:
+            dragging_sensitivity = False
+
+        elif event.type == pygame.MOUSEMOTION:
+            if dragging_sensitivity:
+                mx, my = event.pos
+                rel = (mx - SLIDER_RECT.x) / SLIDER_RECT.w
+                joystick_sensitivity = max(0.0, min(1.0, rel))
+                _settings['joystick_sensitivity'] = joystick_sensitivity
+                save_settings(_settings)
+
+        elif event.type == pygame.KEYDOWN:
+            # keyboard shortcuts to tweak sensitivity
+            if event.key == pygame.K_LEFTBRACKET:
+                joystick_sensitivity = max(0.0, joystick_sensitivity - 0.05)
+                _settings['joystick_sensitivity'] = joystick_sensitivity
+                save_settings(_settings)
+            elif event.key == pygame.K_RIGHTBRACKET:
+                joystick_sensitivity = min(1.0, joystick_sensitivity + 0.05)
+                _settings['joystick_sensitivity'] = joystick_sensitivity
+                save_settings(_settings)
 
     # If locked, enforce the snapshot every frame so nothing can override it
     if is_clicked3 and locked_angles is not None:
@@ -270,6 +327,16 @@ while running:
         draw_rounded_rect(screen, btn_rect, color, radius=5)
         lbl = small_font.render(text, True, WHITE)
         screen.blit(lbl, lbl.get_rect(center=btn_rect.center))
+
+    # Draw sensitivity slider (persistent)
+    pygame.draw.rect(screen, DIM, SLIDER_RECT, border_radius=4)
+    fill_w = int(SLIDER_RECT.w * joystick_sensitivity)
+    pygame.draw.rect(screen, ACCENT, (SLIDER_RECT.x, SLIDER_RECT.y, fill_w, SLIDER_RECT.h), border_radius=4)
+    knob_x = SLIDER_RECT.x + fill_w
+    knob_y = SLIDER_RECT.centery
+    pygame.draw.circle(screen, WHITE, (int(knob_x), int(knob_y)), SLIDER_KNOB_RADIUS)
+    sens_label = small_font.render(f"Sensitivity: {int(joystick_sensitivity*100)}%  ([ / ] to adjust)", True, TEXT_COLOR)
+    screen.blit(sens_label, (SLIDER_RECT.x, SLIDER_RECT.y - 22))
 
     # Sending the data through the websocket server to the raspberry pi, which then uses the pi_client.py to control the robot
     with ws_client.data_lock:

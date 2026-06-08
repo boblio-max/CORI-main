@@ -283,7 +283,8 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                         ws_client.data["A3"] = 180 - float(angles[2])
                         ws_client.data["A4"] = 180 - float(angles[3])
                         ws_client.data["A5"] = float(angles[4])
-                        ws_client.data["A6"] = 90.0
+                        # Standardize A6: -1.0=open, 0.0=stop, +1.0=close
+                        ws_client.data["A6"] = 0.0
                         ws_client.data["A7"] = float(180 if angles[5] == 1 else 90)
                         
         cv2.imshow("Hand Tracking", frame)

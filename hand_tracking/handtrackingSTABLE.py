@@ -52,7 +52,8 @@ cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
 
 # Initialize angles and state variables
-angles = [90, 90, 90, 90, 90, 1.0] 
+# A6 (index 5) is the claw throttle: -1.0 = open, 0.0 = stop, +1.0 = close
+angles = [90, 90, 90, 90, 90, 0.0]
 is_rotating = False
 
 # Load the hand landmark model, downloading it if it doesn't exist
@@ -145,7 +146,8 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     # Draws a line from the wrist to the middle finger tip for visualization
                     cv2.line(frame,pts[0],pts[9], (0,0,255), 2)
                     
-                    angles[5] = 1.0 if grab else 0.0
+                    # Standardize A6 to -1..1: +1 close, -1 open, 0 stop
+                    angles[5] = 1.0 if grab else -1.0
                     
                     # HAND GUESTURE RECOGNITION:
 
@@ -153,10 +155,11 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     if in_range(pts[8][0], pts[7][0], 15) and in_range(pts[8][1], pts[7][1], 15) and in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
                         # print(f"grab {i}")
                         grab = not grab
+                        # ensure consistent mapping: grab -> +1 (close), not-grab -> -1 (open)
                         if grab:
                             angles[5] = 1.0
                         else:
-                            angles[5] = 0.0
+                            angles[5] = -1.0
 
                     
                     # Check for thumb up gesture

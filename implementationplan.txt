@@ -1,0 +1,57 @@
+Implementation Plan — Audit Results
+
+Summary
+- Performed a lightweight audit across the codebase for debug prints, servo mappings, and inconsistent conventions.
+- Found several issues and improvement opportunities (listed below).
+
+Priority Issues (must fix before next deploy)
+1) Inconsistent A6 (claw) value conventions
+   - Problem: Different modules treat A6 differently: some use -1..1 (AI code), some use 0..1 or 0/1 (dashboard, handtracking). This causes confusion and mismatched behavior on the Pi.
+   - Impact: Claw throttle commands may be wrong (stop vs open vs close) or interpreted inconsistently by `pi_client.py`.
+   - Proposal: Standardize A6 to the range -1.0..+1.0 across the repo. Update callers: `dashboard.dashboard.py`, `hand_tracking/handtracking.py`, `sim/sim.py` (if relevant), and any AI modules. Add a short helper `clamp_claw(value)` and document in README.
+
+2) Claw servo type detection / fallback
+   - Problem: `pi_client.py` currently always writes `kit.continuous_servo[...] .throttle`. If the physical servo is positional (not continuous), throttle writes will do nothing.
+   - Impact: Claw won't move even if A6 value is sent correctly.
+   - Proposal: Add a config flag `CLAW_CONTINUOUS = True/False` to `core/config.py`. In `pi_client.py`, if `CLAW_CONTINUOUS` is True use `continuous_servo.throttle`. If False, map -1..1 to 0..180 angle and write `kit.servo[...] .angle`. Add a small detection/test script (`pi_test.py`) and logs to help verify.
+
+Medium Issues / Improvements
+3) Debug prints left in production
+   - Problem: Many modules use `print()` for status and debug messages (e.g., `pi_client.py`, `handtracking.py`, `ws_client.py`). I added extra debug prints to `pi_client.py` during diagnosis.
+   - Impact: Noisy console, harder to control log levels in production.
+   - Proposal: Replace `print()` calls with Python `logging` at appropriate levels (INFO/DEBUG/WARNING). Add a `--verbose` flag or env var to raise logging to DEBUG. Remove the temporary diagnostic prints after verification.
+
+4) `ws_client.start_server()` invoked at import/top-level
+   - Problem: Several front-end modules (dashboard, handtracking, sim) start the WebSocket server via `threading.Thread(target=ws_client.start_server, daemon=True).start()` at the module top-level.
+   - Impact: Importing these modules will start network servers unexpectedly (hard to control lifecycle).
+   - Proposal: Move server start into a `main()` guarded by `if __name__ == '__main__':` or provide an explicit `start()` call used by the launcher script. Alternatively add a `WS_SERVER_AUTOSTART = True/False` config flag.
+
+5) `core/config.py` host and pin defaults
+   - Problem: `SERVER_HOST` and SERVO pin numbers are hard-coded. That is fine for dev, but can be made configurable.
+   - Proposal: Allow overriding via environment variables or a small `local_config.py`/`.env` file. Document defaults in README.
+
+6) Joystick sensitivity UX
+   - Problem: Sensitivity is now hard-coded to `JOYSTICK_SENSITIVITY = 0.25` in `dashboard.py`.
+   - Proposal: Expose the sensitivity as an on-screen slider or a keyboard shortcut to tune at runtime. Also persist user preference in a small JSON file.
+
+Low-risk / Nice-to-have
+7) Add unit tests for critical mapping functions
+   - Add tests for `map_value()`, `axis_to_angle()` scaling and `clamp` behavior.
+8) Add `pi_test.py` helper (recommended) to run angle and throttle sequences on a given channel for verification. (I prepared a snippet during diagnosis.)
+
+Files I Edited During Audit
+- `core/config.py` (reassigned roll/claw pins earlier; please confirm wiring)
+- `dashboard/dashboard.py` (added `JOYSTICK_SENSITIVITY`)
+- `servers/pi_client.py` (temporary debug prints for diagnosis)
+
+Next steps (suggested order)
+1. Approve this implementation plan.
+2. I will standardize A6 to -1..1 across the repo and update callers.
+3. Add `CLAW_CONTINUOUS` config flag and implement fallback in `pi_client.py`.
+4. Replace `print()` with `logging` in `pi_client.py`, and remove temporary debug prints.
+5. Move `ws_client.start_server()` calls to guarded `main()` or add `WS_SERVER_AUTOSTART` flag.
+6. Add `pi_test.py` and small unit tests for mapping helpers.
+
+If you approve, I will implement items 2–4 first (standardize A6, add config flag, implement fallback), then run tests and report back with updated code and instructions for runtime verification.
+
+End of plan.
