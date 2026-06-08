@@ -145,7 +145,7 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     # Draws a line from the wrist to the middle finger tip for visualization
                     cv2.line(frame,pts[0],pts[9], (0,0,255), 2)
                     
-                    angles[6] = 0
+                    angles[5] = 1.0 if grab else 0.0
                     
                     # HAND GUESTURE RECOGNITION:
 
@@ -154,9 +154,9 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                         # print(f"grab {i}")
                         grab = not grab
                         if grab:
-                            angles[6] = 1
+                            angles[5] = 1.0
                         else:
-                            angles[6] = 0
+                            angles[5] = 0.0
 
                     
                     # Check for thumb up gesture
@@ -220,6 +220,8 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     # Finally, we move certain angles based on how close or far the hand is to create a more natural movement,
                     # with the arm extending more as the hand moves forward and retracting as it moves back
 
+
+
                     dx = x9 - x0
                     dy = y9 - y0
                     dist_09 = math.hypot(dx, dy)
@@ -247,18 +249,18 @@ with vision.HandLandmarker.create_from_options(options) as landmarker:
                     remaining_pitch -= angles[2]
                     angles[1] = max(A2_min, min(A2_max, remaining_pitch))
                     
-                    set_move = 5
-                    if dist_09 > 250:
-                        scale = dist_09 / 250
-                        angles[1] = max(0, min(180, angles[1] + set_move * scale))
-                        angles[2] = max(0, min(180, angles[2] - (set_move * scale)/2))
-                        angles[3] = max(0, min(180, angles[3] - (set_move * scale)/2))
+                    # set_move = 5
+                    # if dist_09 > 250:
+                    #     scale = dist_09 / 250
+                    #     angles[1] = max(0, min(180, angles[1] + set_move * scale))
+                    #     angles[2] = max(0, min(180, angles[2] - (set_move * scale)/2))
+                    #     angles[3] = max(0, min(180, angles[3] - (set_move * scale)/2))
 
-                    elif dist_09 < 250:
-                        scale = dist_09 / 250
-                        angles[1] = max(0, min(180, angles[1] + set_move * scale))
-                        angles[2] = max(0, min(180, angles[2] - (set_move * scale)/2))
-                        angles[3] = max(0, min(180, angles[3] - (set_move * scale)/2))
+                    # elif dist_09 < 250:
+                    #     scale = dist_09 / 250
+                    #     angles[1] = max(0, min(180, angles[1] + set_move * scale))
+                    #     angles[2] = max(0, min(180, angles[2] - (set_move * scale)/2))
+                    #     angles[3] = max(0, min(180, angles[3] - (set_move * scale)/2))
 
                     key = cv2.waitKey(1) & 0xFF
                     if key == ord('r'): 

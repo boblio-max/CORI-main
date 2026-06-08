@@ -39,6 +39,10 @@ CIRCLE_BORDER = 3
 NEEDLE_WIDTH  = 3
 GAUGE_BG      = (40, 40, 60)
 
+# Joystick sensitivity: 0.0 = no movement, 1.0 = original sensitivity
+# Lower this value to reduce how much the sticks move the joints.
+JOYSTICK_SENSITIVITY = 0.75
+
 # Initialized fonts for rendering text on the dashboard
 font       = pygame.font.SysFont('Arial', 20, bold=True)
 small_font = pygame.font.SysFont('Arial', 14)
@@ -98,6 +102,8 @@ def axis_to_angle(raw_axis):
         
         sign = 1 if raw_axis > 0 else -1
         raw_axis = sign * (abs(raw_axis) - DEADZONE) / (1.0 - DEADZONE)
+        # apply global sensitivity scaling (reduces responsiveness)
+        raw_axis = raw_axis * JOYSTICK_SENSITIVITY
     return 90.0 + raw_axis * 90.0
 
 # Scales the claw angle from 0-180 degrees to a range of -1 to 1, where 90 degrees corresponds to 0 (No movement)

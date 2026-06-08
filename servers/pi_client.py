@@ -28,6 +28,8 @@ async def main():
     # Connect to the WebSocket server and continuously receive servo angle updates
     async with websockets.connect(uri) as websocket:
         print("Connected to WebSocket server.")
+        # Log mapping for verification
+        print(f"Servo mapping: A5->channel {servo_mapping['A5']}, A6->channel {servo_mapping['A6']}")
         while True:
             # Recieves a packet containing the angles for A1-A6, which are expected to be in JSON format
             packet = await websocket.recv()
@@ -42,10 +44,14 @@ async def main():
                 if key in servo_mapping:
                     val = float(float_array[key])
                     clamped_val = max(0, min(180, val))
-                    kit.servo[servo_mapping[key]].angle = clamped_val
+                    chan = servo_mapping[key]
+                    kit.servo[chan].angle = clamped_val
+                    
 
             # Control A6 as a continuous servo throttle (-1 to 1) for the claw
-            kit.continuous_servo[servo_mapping["A6"]].throttle = float(float_array['A6'])
+            claw_chan = servo_mapping["A6"]
+            throttle = float(float_array['A6'])
+            kit.continuous_servo[claw_chan].throttle = throttle
 
 if __name__ == "__main__":
     asyncio.run(main()) 
