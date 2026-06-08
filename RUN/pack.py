@@ -1,12 +1,19 @@
 # USED TO PUT THE ARM INTO A SAFE POSITION FOR TRANSPORT OR STORAGE
-from adafruit_servokit import ServoKit
+try:
+    from adafruit_servokit import ServoKit
+except Exception as exc:
+    ServoKit = None
+    print(f"Warning: adafruit_servokit unavailable: {exc}")
 
-channels = 16
-kit = ServoKit(channels=channels)
+if ServoKit is not None:
+    channels = 16
+    kit = ServoKit(channels=channels)
 
-kit.servo[15].angle = 90
-kit.servo[14].angle = 20
-kit.servo[13].angle = 90
-kit.servo[12].angle = 70
-kit.servo[11].angle = 90
-kit.continuous_servo[10].throttle = 0
+    kit.servo[15].angle = 90
+    kit.servo[14].angle = 20
+    kit.servo[13].angle = 90
+    kit.servo[12].angle = 70
+    kit.servo[11].angle = 90
+    kit.continuous_servo[10].throttle = 0
+else:
+    print("Cannot run pack.py because adafruit_servokit is unavailable.")

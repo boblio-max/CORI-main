@@ -51,11 +51,17 @@ async def broadcast_loop():
 
 # Main function to start the WebSocket server and broadcast loop
 async def send_server():
-    server = await websockets.serve(handler, local_ip, 8765)
-    print("Server running on port 8765")
-    asyncio.create_task(broadcast_loop())
-    await server.wait_closed()
+    try:
+        server = await websockets.serve(handler, local_ip, 8765)
+        print("Server running on port 8765")
+        asyncio.create_task(broadcast_loop())
+        await server.wait_closed()
+    except OSError as exc:
+        print(f"WebSocket bind error: {exc}")
 
 # Function to start the server, can be called from other modules
 def start_server():
     asyncio.run(send_server())
+
+if __name__ == "__main__":
+    start_server()

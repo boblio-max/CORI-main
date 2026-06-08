@@ -4,13 +4,17 @@ import os
 import asyncio
 import json
 import websockets
-from adafruit_servokit import ServoKit
+try:
+    from adafruit_servokit import ServoKit
+except Exception as exc:
+    ServoKit = None
+    print(f"Warning: adafruit_servokit unavailable: {exc}")
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from core import config
 import socket
 
 # Initialize the ServoKit for controlling the servos
-kit = ServoKit(channels=16)
+kit = ServoKit(channels=16) if ServoKit is not None else None
 SERVER_IP = config.SERVER_HOST
 
 async def main():
