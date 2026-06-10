@@ -31,3 +31,8 @@ SAFE_POSE = [90.0, 90.0, 90.0, 90.0, 90.0, 0.0]
 # Servo angle limits
 SERVO_MIN_ANGLE = 0
 SERVO_MAX_ANGLE = 180
+
+# If True, the claw is a continuous-rotation servo and expects throttle values
+# in range -1.0..+1.0. If False, the claw is a positional servo and will
+# receive mapped angles (0..180). Change this to match your hardware.
+CLAW_CONTINUOUS = True

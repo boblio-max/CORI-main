@@ -155,8 +155,10 @@ def main():
                         
                         # HAND GUESTURE RECOGNITION:
     
-                        # Check for grab gesture
-                        if in_range(pts[8][0], pts[7][0], 15) and in_range(pts[8][1], pts[7][1], 15) and in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
+                        # Check for grab gesture (all three finger tips pinched to palm base)
+                        if (in_range(pts[8][0], pts[7][0], 15) and in_range(pts[8][1], pts[7][1], 15) and 
+                            in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and 
+                            in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15)):
                             # print(f"grab {i}")
                             grab = not grab
                             
@@ -191,8 +193,10 @@ def main():
                                 cv2.circle(frame, pt, 20, (255, 255, 0), -1)
                         
     
-                        # Check for point gesture
-                        if in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15):
+                        # Check for point gesture (index, middle, ring pinched, pinky open)
+                        if (in_range(pts[12][0], pts[11][0], 15) and in_range(pts[12][1], pts[11][1], 15) and 
+                            in_range(pts[16][0], pts[15][0], 15) and in_range(pts[16][1], pts[15][1], 15) and 
+                            in_range(pts[20][0], pts[19][0], 15) and in_range(pts[20][1], pts[19][1], 15)):
                             print("point")
                             pass
                         
@@ -208,7 +212,7 @@ def main():
                             angles[5] = 1.0
                         else:
                             angles[5] = -1.0
-                        # gets the coordinates of the wrist (landmark 0) and the middle of the palm (landmark 9) to calculate the distance and angle between them for controlling the arm's position and orientation
+                        # gets the coordinates of the wrist (landmark 0) and the middle of the palm (landmark 9) to calculate the distance and angle between them for controlling the arm's position
                         x0, y0 = pts[0]
                         x9, y9 = x, y
                         
@@ -286,15 +290,14 @@ def main():
                                 locked_angles = None
                                 print("Robot unlocked — live control resumed")
                         
-                        # print(float(angles[5]), 180 - float(angles[1]), 180 - float(angles[2]), 180 - float(angles[3]), float(angles[0]), final_x_val)
                         # If locked, override outgoing angles with snapshot
                         out_angles = locked_angles if locked and locked_angles is not None else angles
-                        print(float(out_angles[0]), float(out_angles[3]), float(out_angles[2]), float(out_angles[1]), float(out_angles[4]), float(out_angles[5]))
+                        print(float(out_angles[0]), float(out_angles[1]), float(out_angles[2]), float(out_angles[3]), float(out_angles[4]), float(out_angles[5]))
                         with ws_client.data_lock:
                             ws_client.data["A1"] = float(out_angles[0])
-                            ws_client.data["A2"] = float(out_angles[3])
+                            ws_client.data["A2"] = float(out_angles[1])
                             ws_client.data["A3"] = float(out_angles[2])
-                            ws_client.data["A4"] = float(out_angles[1])
+                            ws_client.data["A4"] = float(out_angles[3])
                             ws_client.data["A5"] = float(out_angles[4])
                             ws_client.data["A6"] = float(out_angles[5])
                             
