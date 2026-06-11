@@ -1,7 +1,7 @@
 import socket
 
 # Configuration for the robotic arm control server
-SERVER_HOST = r"192.168.1.20"
+SERVER_HOST = r"10.173.156.209"
 SERVER_PORT = 8765
 
 # Mapping of servo names to their corresponding GPIO pins
